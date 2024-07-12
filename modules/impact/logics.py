@@ -690,10 +690,3 @@ class ImpactControlBridge:
 
         return (value, )
 
-
-original_handle_execution = execution.PromptExecutor.handle_execution_error
-
-
-def handle_execution_error(**kwargs):
-    execution.PromptExecutor.handle_execution_error(**kwargs)
-

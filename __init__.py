@@ -5,90 +5,25 @@
 @description: This extension offers various detector nodes and detailer nodes that allow you to configure a workflow that automatically enhances facial details. And provide iterative upscaler.
 """
 
-import shutil
-import folder_paths
-import os
-import sys
-import traceback
-
-comfy_path = os.path.dirname(folder_paths.__file__)
-impact_path = os.path.join(os.path.dirname(__file__))
-subpack_path = os.path.join(os.path.dirname(__file__), "impact_subpack")
-modules_path = os.path.join(os.path.dirname(__file__), "modules")
-
-sys.path.append(modules_path)
-
-import impact.config
-import impact.sample_error_enhancer
-print(f"### Loading: ComfyUI-Impact-Pack ({impact.config.version})")
-
-
-def do_install():
-    import importlib
-    spec = importlib.util.spec_from_file_location('impact_install', os.path.join(os.path.dirname(__file__), 'install.py'))
-    impact_install = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(impact_install)
-
-
-# ensure dependency
-if not os.path.exists(os.path.join(subpack_path, ".git")) and os.path.exists(subpack_path):
-    print(f"### CompfyUI-Impact-Pack: corrupted subpack detected.")
-    shutil.rmtree(subpack_path)
-
-if impact.config.get_config()['dependency_version'] < impact.config.dependency_version or not os.path.exists(subpack_path):
-    print(f"### ComfyUI-Impact-Pack: Updating dependencies [{impact.config.get_config()['dependency_version']} -> {impact.config.dependency_version}]")
-    do_install()
-
-sys.path.append(subpack_path)
-
-# Core
-# recheck dependencies for colab
-try:
-    import impact.subpack_nodes  # This import must be done before cv2.
-
-    import folder_paths
-    import torch
-    import cv2
-    from cv2 import setNumThreads
-    import numpy as np
-    import comfy.samplers
-    import comfy.sd
-    import warnings
-    from PIL import Image, ImageFilter
-    from skimage.measure import label, regionprops
-    from collections import namedtuple
-    import piexif
-
-    if not impact.config.get_config()['mmdet_skip']:
-        import mmcv
-        from mmdet.apis import (inference_detector, init_detector)
-        from mmdet.evaluation import get_classes
-except:
-    import importlib
-    print("### ComfyUI-Impact-Pack: Reinstall dependencies (several dependencies are missing.)")
-    do_install()
-
-
-import impact.impact_server  # to load server api
-
-from .modules.impact.impact_pack import *
-from .modules.impact.detectors import *
-from .modules.impact.pipe import *
-from .modules.impact.logics import *
-from .modules.impact.util_nodes import *
-from .modules.impact.segs_nodes import *
-from .modules.impact.special_samplers import *
-from .modules.impact.hf_nodes import *
-from .modules.impact.bridge_nodes import *
-from .modules.impact.hook_nodes import *
+import modules.impact.config
+import modules.impact.subpack_nodes  # This import must be done before cv2.
+import modules.impact.impact_server  # to load server api
+import modules.impact.legacy_nodes
+import modules.impact.sample_error_enhancer
+import modules.impact.wildcards
 from .modules.impact.animatediff_nodes import *
+from .modules.impact.bridge_nodes import *
+from .modules.impact.detectors import *
+from .modules.impact.hf_nodes import *
+from .modules.impact.hook_nodes import *
+from .modules.impact.impact_pack import *
+from .modules.impact.logics import *
+from .modules.impact.mmdet_nodes import MMDetDetectorProvider
+from .modules.impact.pipe import *
+from .modules.impact.segs_nodes import *
 from .modules.impact.segs_upscaler import *
-
-import threading
-
-
-threading.Thread(target=impact.wildcards.wildcard_load).start()
-
+from .modules.impact.special_samplers import *
+from .modules.impact.util_nodes import *
 
 NODE_CLASS_MAPPINGS = {
     "SAMLoader": SAMLoader,
@@ -302,7 +237,6 @@ NODE_CLASS_MAPPINGS = {
     "GITSSchedulerFuncProvider": GITSSchedulerFuncProvider
 }
 
-
 NODE_DISPLAY_NAME_MAPPINGS = {
     "SAMLoader": "SAMLoader (Impact)",
 
@@ -435,54 +369,31 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "GITSSchedulerFuncProvider": "GITSScheduler Func Provider",
 }
 
-if not impact.config.get_config()['mmdet_skip']:
-    from impact.mmdet_nodes import *
-    import impact.legacy_nodes
-    NODE_CLASS_MAPPINGS.update({
-        "MMDetDetectorProvider": MMDetDetectorProvider,
-        "MMDetLoader": impact.legacy_nodes.MMDetLoader,
-        "MaskPainter": impact.legacy_nodes.MaskPainter,
-        "SegsMaskCombine": impact.legacy_nodes.SegsMaskCombine,
-        "BboxDetectorForEach": impact.legacy_nodes.BboxDetectorForEach,
-        "SegmDetectorForEach": impact.legacy_nodes.SegmDetectorForEach,
-        "BboxDetectorCombined": impact.legacy_nodes.BboxDetectorCombined,
-        "SegmDetectorCombined": impact.legacy_nodes.SegmDetectorCombined,
-    })
+NODE_CLASS_MAPPINGS.update({
+    "MMDetDetectorProvider": MMDetDetectorProvider,
+    "MMDetLoader": modules.impact.legacy_nodes.MMDetLoader,
+    "MaskPainter": modules.impact.legacy_nodes.MaskPainter,
+    "SegsMaskCombine": modules.impact.legacy_nodes.SegsMaskCombine,
+    "BboxDetectorForEach": modules.impact.legacy_nodes.BboxDetectorForEach,
+    "SegmDetectorForEach": modules.impact.legacy_nodes.SegmDetectorForEach,
+    "BboxDetectorCombined": modules.impact.legacy_nodes.BboxDetectorCombined,
+    "SegmDetectorCombined": modules.impact.legacy_nodes.SegmDetectorCombined,
+})
 
-    NODE_DISPLAY_NAME_MAPPINGS.update({
-        "MaskPainter": "MaskPainter (Deprecated)",
-        "MMDetLoader": "MMDetLoader (Legacy)",
-        "SegsMaskCombine": "SegsMaskCombine (Legacy)",
-        "BboxDetectorForEach": "BboxDetectorForEach (Legacy)",
-        "SegmDetectorForEach": "SegmDetectorForEach (Legacy)",
-        "BboxDetectorCombined": "BboxDetectorCombined (Legacy)",
-        "SegmDetectorCombined": "SegmDetectorCombined (Legacy)",
-    })
+NODE_DISPLAY_NAME_MAPPINGS.update({
+    "MaskPainter": "MaskPainter (Deprecated)",
+    "MMDetLoader": "MMDetLoader (Legacy)",
+    "SegsMaskCombine": "SegsMaskCombine (Legacy)",
+    "BboxDetectorForEach": "BboxDetectorForEach (Legacy)",
+    "SegmDetectorForEach": "SegmDetectorForEach (Legacy)",
+    "BboxDetectorCombined": "BboxDetectorCombined (Legacy)",
+    "SegmDetectorCombined": "SegmDetectorCombined (Legacy)",
+})
 
-try:
-    import impact.subpack_nodes
-
-    NODE_CLASS_MAPPINGS.update(impact.subpack_nodes.NODE_CLASS_MAPPINGS)
-    NODE_DISPLAY_NAME_MAPPINGS.update(impact.subpack_nodes.NODE_DISPLAY_NAME_MAPPINGS)
-except Exception as e:
-    print("### ComfyUI-Impact-Pack: (IMPORT FAILED) Subpack\n")
-    print("  The module at the `custom_nodes/ComfyUI-Impact-Pack/impact_subpack` path appears to be incomplete.")
-    print("  Recommended to delete the path and restart ComfyUI.")
-    print("  If the issue persists, please report it to https://github.com/ltdrdata/ComfyUI-Impact-Pack/issues.")
-    print("\n---------------------------------")
-    traceback.print_exc()
-    print("---------------------------------\n")
+NODE_CLASS_MAPPINGS.update(modules.impact.subpack_nodes.NODE_CLASS_MAPPINGS)
+NODE_DISPLAY_NAME_MAPPINGS.update(modules.impact.subpack_nodes.NODE_DISPLAY_NAME_MAPPINGS)
 
 WEB_DIRECTORY = "js"
 __all__ = ['NODE_CLASS_MAPPINGS', 'NODE_DISPLAY_NAME_MAPPINGS']
 
-
-try:
-    import cm_global
-    cm_global.register_extension('ComfyUI-Impact-Pack',
-                                 {'version': config.version_code,
-                                  'name': 'Impact Pack',
-                                  'nodes': set(NODE_CLASS_MAPPINGS.keys()),
-                                  'description': 'This extension provides inpainting functionality based on the detector and detailer, along with convenient workflow features like wildcards and logics.', })
-except:
-    pass
+modules.impact.wildcards.wildcard_load()
