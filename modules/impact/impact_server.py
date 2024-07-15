@@ -1,35 +1,34 @@
+import io
 import os
+import random
 import threading
 import traceback
+from io import BytesIO
 
+import numpy as np
+import torchvision
+from PIL import Image
 from aiohttp import web
+from segment_anything import SamPredictor, sam_model_registry
 
 from comfy import model_management
 from comfy.cmd import folder_paths
-
-import torchvision
-
+from comfy.cmd.server import PromptServer
+from comfy.component_model.plugins import prompt_server_instance_routes
+from comfy.nodes import base_nodes as nodes
 from . import core, config
 from . import impact_pack
-from .utils import to_tensor
-from segment_anything import SamPredictor, sam_model_registry
-import numpy as np
-from comfy.nodes import base_nodes as nodes
-from PIL import Image
-import io
 from . import wildcards
-from io import BytesIO
-import random
-from comfy.cmd.server import PromptServer
+from .utils import to_tensor
 
 
-@PromptServer.instance.routes.post("/upload/temp")
+@prompt_server_instance_routes.post("/upload/temp")
 async def upload_image(request):
     upload_dir = folder_paths.get_temp_directory()
 
     if not os.path.exists(upload_dir):
         os.makedirs(upload_dir)
-    
+
     post = await request.post()
     image = post.get("image")
 
@@ -48,7 +47,7 @@ async def upload_image(request):
 
         with open(filepath, "wb") as f:
             f.write(image.file.read())
-        
+
         return web.json_response({"name": filename})
     else:
         return web.Response(status=400)
@@ -90,7 +89,7 @@ def async_prepare_sam(image_dir, model_name, filename):
         sam_predictor.model.cpu()
 
 
-@PromptServer.instance.routes.post("/sam/prepare")
+@prompt_server_instance_routes.post("/sam/prepare")
 async def sam_prepare(request):
     global sam_predictor
     global last_prepare_data
@@ -129,7 +128,7 @@ async def sam_prepare(request):
     return web.Response(status=200)
 
 
-@PromptServer.instance.routes.post("/sam/release")
+@prompt_server_instance_routes.post("/sam/release")
 async def release_sam(request):
     global sam_predictor
 
@@ -140,7 +139,7 @@ async def release_sam(request):
     print(f"[INFO] ComfyUI-Impact-Pack: unloading SAM model")
 
 
-@PromptServer.instance.routes.post("/sam/detect")
+@prompt_server_instance_routes.post("/sam/detect")
 async def sam_detect(request):
     global sam_predictor
     with sam_lock:
@@ -193,19 +192,19 @@ async def sam_detect(request):
             return web.Response(status=400)
 
 
-@PromptServer.instance.routes.get("/impact/wildcards/refresh")
+@prompt_server_instance_routes.get("/impact/wildcards/refresh")
 async def wildcards_refresh(request):
     wildcards.wildcard_load()
     return web.Response(status=200)
 
 
-@PromptServer.instance.routes.get("/impact/wildcards/list")
+@prompt_server_instance_routes.get("/impact/wildcards/list")
 async def wildcards_list(request):
     data = {'data': wildcards.get_wildcard_list()}
     return web.json_response(data)
 
 
-@PromptServer.instance.routes.post("/impact/wildcards")
+@prompt_server_instance_routes.post("/impact/wildcards")
 async def populate_wildcards(request):
     data = await request.json()
     populated = wildcards.process(data['text'], data.get('seed', None))
@@ -214,7 +213,8 @@ async def populate_wildcards(request):
 
 segs_picker_map = {}
 
-@PromptServer.instance.routes.get("/impact/segs/picker/count")
+
+@prompt_server_instance_routes.get("/impact/segs/picker/count")
 async def segs_picker_count(request):
     node_id = request.rel_url.query.get('id', '')
 
@@ -225,7 +225,7 @@ async def segs_picker_count(request):
     return web.Response(status=400)
 
 
-@PromptServer.instance.routes.get("/impact/segs/picker/view")
+@prompt_server_instance_routes.get("/impact/segs/picker/view")
 async def segs_picker(request):
     node_id = request.rel_url.query.get('id', '')
     idx = int(request.rel_url.query.get('idx', ''))
@@ -237,12 +237,13 @@ async def segs_picker(request):
         image_bytes = BytesIO()
         pil.save(image_bytes, format="PNG")
         image_bytes.seek(0)
-        return web.Response(status=200, body=image_bytes, content_type='image/png', headers={"Content-Disposition": f"filename={node_id}{idx}.png"})
+        return web.Response(status=200, body=image_bytes, content_type='image/png',
+                            headers={"Content-Disposition": f"filename={node_id}{idx}.png"})
 
     return web.Response(status=400)
 
 
-@PromptServer.instance.routes.get("/view/validate")
+@prompt_server_instance_routes.get("/view/validate")
 async def view_validate(request):
     if "filename" in request.rel_url.query:
         filename = request.rel_url.query["filename"]
@@ -263,7 +264,7 @@ async def view_validate(request):
     return web.Response(status=400)
 
 
-@PromptServer.instance.routes.get("/impact/validate/pb_id_image")
+@prompt_server_instance_routes.get("/impact/validate/pb_id_image")
 async def view_validate(request):
     if "id" in request.rel_url.query:
         pb_id = request.rel_url.query["id"]
@@ -278,7 +279,7 @@ async def view_validate(request):
     return web.Response(status=400)
 
 
-@PromptServer.instance.routes.get("/impact/set/pb_id_image")
+@prompt_server_instance_routes.get("/impact/set/pb_id_image")
 async def set_previewbridge_image(request):
     try:
         if "filename" in request.rel_url.query:
@@ -314,7 +315,7 @@ async def set_previewbridge_image(request):
     return web.Response(status=400)
 
 
-@PromptServer.instance.routes.get("/impact/get/pb_id_image")
+@prompt_server_instance_routes.get("/impact/get/pb_id_image")
 async def get_previewbridge_image(request):
     if "id" in request.rel_url.query:
         pb_id = request.rel_url.query["id"]
@@ -326,7 +327,7 @@ async def get_previewbridge_image(request):
     return web.Response(status=400)
 
 
-@PromptServer.instance.routes.get("/impact/view/pb_id_image")
+@prompt_server_instance_routes.get("/impact/view/pb_id_image")
 async def view_previewbridge_image(request):
     if "id" in request.rel_url.query:
         pb_id = request.rel_url.query["id"]
@@ -355,7 +356,8 @@ def onprompt_for_switch(json_data):
             select_input = v['inputs']['select']
             if isinstance(select_input, list) and len(select_input) == 2:
                 input_node = json_data['prompt'][select_input[0]]
-                if input_node['class_type'] == 'ImpactInt' and 'inputs' in input_node and 'value' in input_node['inputs']:
+                if input_node['class_type'] == 'ImpactInt' and 'inputs' in input_node and 'value' in input_node[
+                    'inputs']:
                     inversed_switch_info[k] = input_node['inputs']['value']
             else:
                 inversed_switch_info[k] = select_input
@@ -365,13 +367,16 @@ def onprompt_for_switch(json_data):
                 select_input = v['inputs']['select']
                 if isinstance(select_input, list) and len(select_input) == 2:
                     input_node = json_data['prompt'][select_input[0]]
-                    if input_node['class_type'] == 'ImpactInt' and 'inputs' in input_node and 'value' in input_node['inputs']:
+                    if input_node['class_type'] == 'ImpactInt' and 'inputs' in input_node and 'value' in input_node[
+                        'inputs']:
                         onprompt_switch_info[k] = input_node['inputs']['value']
-                    if input_node['class_type'] == 'ImpactSwitch' and 'inputs' in input_node and 'select' in input_node['inputs']:
+                    if input_node['class_type'] == 'ImpactSwitch' and 'inputs' in input_node and 'select' in input_node[
+                        'inputs']:
                         if isinstance(input_node['inputs']['select'], int):
                             onprompt_switch_info[k] = input_node['inputs']['select']
                         else:
-                            print(f"\n##### ##### #####\n[WARN] {cls}: For the 'select' operation, only 'select_index' of the 'ImpactSwitch', which is not an input, or 'ImpactInt' and 'Primitive' are allowed as inputs.\n##### ##### #####\n")
+                            print(
+                                f"\n##### ##### #####\n[WARN] {cls}: For the 'select' operation, only 'select_index' of the 'ImpactSwitch', which is not an input, or 'ImpactInt' and 'Primitive' are allowed as inputs.\n##### ##### #####\n")
                 else:
                     onprompt_switch_info[k] = select_input
 
@@ -413,6 +418,7 @@ def onprompt_for_switch(json_data):
 
         for kk in disable_targets:
             del v['inputs'][kk]
+
 
 def onprompt_for_pickers(json_data):
     detected_pickers = set()
@@ -458,18 +464,20 @@ def regional_sampler_seed_update(json_data):
 
             new_seed = None
             if seed_2nd_mode == 'increment':
-                new_seed = v['inputs']['seed_2nd']+1
+                new_seed = v['inputs']['seed_2nd'] + 1
                 if new_seed > 1125899906842624:
                     new_seed = 0
             elif seed_2nd_mode == 'decrement':
-                new_seed = v['inputs']['seed_2nd']-1
+                new_seed = v['inputs']['seed_2nd'] - 1
                 if new_seed < 0:
                     new_seed = 1125899906842624
             elif seed_2nd_mode == 'randomize':
                 new_seed = random.randint(0, 1125899906842624)
 
             if new_seed is not None:
-                PromptServer.instance.send_sync("impact-node-feedback", {"node_id": k, "widget_name": "seed_2nd", "type": "INT", "value": new_seed})
+                PromptServer.instance.send_sync("impact-node-feedback",
+                                                {"node_id": k, "widget_name": "seed_2nd", "type": "INT",
+                                                 "value": new_seed})
 
 
 def onprompt_populate_wildcards(json_data):
@@ -477,7 +485,8 @@ def onprompt_populate_wildcards(json_data):
 
     updated_widget_values = {}
     for k, v in prompt.items():
-        if 'class_type' in v and (v['class_type'] == 'ImpactWildcardEncode' or v['class_type'] == 'ImpactWildcardProcessor'):
+        if 'class_type' in v and (
+                v['class_type'] == 'ImpactWildcardEncode' or v['class_type'] == 'ImpactWildcardProcessor'):
             inputs = v['inputs']
             if inputs['mode'] and isinstance(inputs['populated_text'], str):
                 if isinstance(inputs['seed'], list):
@@ -492,7 +501,8 @@ def onprompt_populate_wildcards(json_data):
                             if not isinstance(input_seed, int):
                                 continue
                         else:
-                            print(f"[Impact Pack] Only `ImpactInt`, `Seed (rgthree)` and `Primitive` Node are allowed as the seed for '{v['class_type']}'. It will be ignored. ")
+                            print(
+                                f"[Impact Pack] Only `ImpactInt`, `Seed (rgthree)` and `Primitive` Node are allowed as the seed for '{v['class_type']}'. It will be ignored. ")
                             continue
                     except:
                         continue
@@ -502,7 +512,9 @@ def onprompt_populate_wildcards(json_data):
                 inputs['populated_text'] = wildcards.process(inputs['wildcard_text'], input_seed)
                 inputs['mode'] = False
 
-                PromptServer.instance.send_sync("impact-node-feedback", {"node_id": k, "widget_name": "populated_text", "type": "STRING", "value": inputs['populated_text']})
+                PromptServer.instance.send_sync("impact-node-feedback",
+                                                {"node_id": k, "widget_name": "populated_text", "type": "STRING",
+                                                 "value": inputs['populated_text']})
                 updated_widget_values[k] = inputs['populated_text']
 
     if 'extra_data' in json_data and 'extra_pnginfo' in json_data['extra_data']:
@@ -534,14 +546,18 @@ def onprompt_for_remote(json_data):
                     if cls == 'ImpactRemoteBoolean' and isinstance(target_inputs[widget_name], bool):
                         widget_type = 'BOOLEAN'
 
-                    elif cls == 'ImpactRemoteInt' and (isinstance(target_inputs[widget_name], int) or isinstance(target_inputs[widget_name], float)):
+                    elif cls == 'ImpactRemoteInt' and (
+                            isinstance(target_inputs[widget_name], int) or isinstance(target_inputs[widget_name],
+                                                                                      float)):
                         widget_type = 'INT'
 
                     if widget_type is None:
                         break
 
                     target_inputs[widget_name] = inputs['value']
-                    PromptServer.instance.send_sync("impact-node-feedback", {"node_id": node_id, "widget_name": widget_name, "type": widget_type, "value": inputs['value']})
+                    PromptServer.instance.send_sync("impact-node-feedback",
+                                                    {"node_id": node_id, "widget_name": widget_name,
+                                                     "type": widget_type, "value": inputs['value']})
 
 
 def onprompt(json_data):
@@ -559,4 +575,5 @@ def onprompt(json_data):
     return json_data
 
 
-PromptServer.instance.add_on_prompt_handler(onprompt)
+if PromptServer.instance is not None:
+    PromptServer.instance.add_on_prompt_handler(onprompt)

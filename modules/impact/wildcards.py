@@ -514,4 +514,6 @@ def wildcard_load():
 
     with wildcard_lock:
         read_wildcard_dict(wildcards_path)
-        read_wildcard_dict(config.get_config()['custom_wildcards'])
+        config_res = config.get_config()
+        if 'custom_wildcards' in config_res:
+            read_wildcard_dict(config_res['custom_wildcards'])
