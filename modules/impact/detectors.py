@@ -1,9 +1,10 @@
-import impact.core as core
-from nodes import MAX_RESOLUTION
-import impact.segs_nodes as segs_nodes
-import impact.utils as utils
+from comfy.nodes.common import MAX_RESOLUTION
+from . import core
+
+from . import segs_nodes
+from . import utils
 import torch
-from impact.core import SEG
+from .core import SEG
 
 
 class SAMDetectorCombined:

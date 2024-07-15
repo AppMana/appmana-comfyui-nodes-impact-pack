@@ -1,13 +1,11 @@
+import re
 import sys
 import time
 
-import execution
-import impact.impact_server
-from server import PromptServer
-from impact.utils import any_typ
-import impact.core as core
-import re
-import nodes
+from comfy.cmd.server import PromptServer
+from comfy.interruption import interrupt_current_processing
+from .utils import any_typ, collect_non_reroute_nodes
+
 
 class ImpactCompare:
     @classmethod
@@ -543,25 +541,6 @@ class ImpactSleep:
 
 
 error_skip_flag = False
-try:
-    import cm_global
-    def filter_message(str):
-        global error_skip_flag
-
-        if "IMPACT-PACK-SIGNAL: STOP CONTROL BRIDGE" in str:
-            return True
-        elif error_skip_flag and "ERROR:root:!!! Exception during processing !!!\n" == str:
-            error_skip_flag = False
-            return True
-        else:
-            return False
-
-    cm_global.try_call(api='cm.register_message_collapse', f=filter_message)
-
-except Exception as e:
-    print(f"[WARN] ComfyUI-Impact-Pack: `ComfyUI` or `ComfyUI-Manager` is an outdated version.")
-    pass
-
 
 def workflow_to_map(workflow):
     nodes = {}
@@ -637,7 +616,7 @@ class ImpactControlBridge:
 
         for link in nodes[unique_id]['outputs'][0]['links']:
             node_id = str(links[link][2])
-            impact.utils.collect_non_reroute_nodes(nodes, links, next_nodes, node_id)
+            collect_non_reroute_nodes(nodes, links, next_nodes, node_id)
 
         return next_nodes
 
@@ -655,7 +634,7 @@ class ImpactControlBridge:
             node_id = str(links[link][2])
 
             next_nodes = []
-            impact.utils.collect_non_reroute_nodes(workflow_nodes, links, next_nodes, node_id)
+            collect_non_reroute_nodes(workflow_nodes, links, next_nodes, node_id)
 
             for next_node_id in next_nodes:
                 node_mode = workflow_nodes[next_node_id]['mode']
@@ -672,21 +651,21 @@ class ImpactControlBridge:
             should_be_active_nodes = mute_nodes + bypass_nodes
             if len(should_be_active_nodes) > 0:
                 PromptServer.instance.send_sync("impact-bridge-continue", {"node_id": unique_id, 'actives': list(should_be_active_nodes)})
-                nodes.interrupt_processing()
+                interrupt_current_processing()
 
         elif behavior:
             # mute
             should_be_mute_nodes = active_nodes + bypass_nodes
             if len(should_be_mute_nodes) > 0:
                 PromptServer.instance.send_sync("impact-bridge-continue", {"node_id": unique_id, 'mutes': list(should_be_mute_nodes)})
-                nodes.interrupt_processing()
+                interrupt_current_processing()
 
         else:
             # bypass
             should_be_bypass_nodes = active_nodes + mute_nodes
             if len(should_be_bypass_nodes) > 0:
                 PromptServer.instance.send_sync("impact-bridge-continue", {"node_id": unique_id, 'bypasses': list(should_be_bypass_nodes)})
-                nodes.interrupt_processing()
+                interrupt_current_processing()
 
         return (value, )
 

@@ -1,9 +1,9 @@
-import folder_paths
-from impact.core import *
+from comfy.cmd import folder_paths
+from .core import *
 import os
 
 import mmcv
-from mmdet.apis import (inference_detector, init_detector)
+from mmdet.apis import inference_detector, init_detector
 from mmdet.evaluation import get_classes
 
 

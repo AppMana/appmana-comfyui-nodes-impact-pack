@@ -1,3 +1,4 @@
+import logging
 import os
 import sys
 
@@ -6,17 +7,20 @@ import comfy.sd
 import warnings
 from segment_anything import sam_model_registry
 from io import BytesIO
+from comfy.cmd import folder_paths
+from comfy.nodes import base_nodes as nodes
 import piexif
 import zipfile
 import re
 
-import impact.wildcards
+from comfy.cmd.server import PromptServer
+from comfy.nodes.common import MAX_RESOLUTION
+from . import wildcards
 
-from impact.utils import *
-import impact.core as core
-from impact.core import SEG
-from impact.config import latent_letter_path
-from nodes import MAX_RESOLUTION
+from .utils import *
+from . import core
+from .core import SEG
+from .config import latent_letter_path
 from PIL import Image, ImageOps
 import numpy as np
 import hashlib
@@ -25,7 +29,6 @@ import safetensors.torch
 from PIL.PngImagePlugin import PngInfo
 import comfy.model_management
 import base64
-import impact.wildcards as wildcards
 from . import hooks
 
 warnings.filterwarnings('ignore', category=UserWarning, message='TypedStorage is deprecated')
@@ -1709,7 +1712,6 @@ class AddMask:
         return (mask,)
 
 
-import nodes
 
 
 def get_image_hash(arr):
@@ -1812,7 +1814,6 @@ class ImageReceiver:
                 return hash(image)
 
 
-from server import PromptServer
 
 class ImageSender(nodes.PreviewImage):
     @classmethod
@@ -1831,6 +1832,7 @@ class ImageSender(nodes.PreviewImage):
     CATEGORY = "ImpactPack/Util"
 
     def doit(self, images, filename_prefix="ImgSender", link_id=0, prompt=None, extra_pnginfo=None):
+        logging.warning("An ImageSender node was used where an API should be used instead.")
         result = nodes.PreviewImage().save_images(images, filename_prefix, prompt, extra_pnginfo)
         PromptServer.instance.send_sync("img-send", {"link_id": link_id, "images": result['ui']['images']})
         return result
@@ -2063,6 +2065,7 @@ class LatentSender(nodes.SaveLatent):
                     'type': self.type
                     }
 
+        logging.warning("A LatentSender node was used where an API should be used instead")
         PromptServer.instance.send_sync("latent-send", {"link_id": link_id, "images": [latent_path]})
 
         return {'ui': {'images': [latent_path]}}
@@ -2087,7 +2090,7 @@ class ImpactWildcardProcessor:
 
     @staticmethod
     def process(**kwargs):
-        return impact.wildcards.process(**kwargs)
+        return wildcards.process(**kwargs)
 
     def doit(self, *args, **kwargs):
         populated_text = ImpactWildcardProcessor.process(text=kwargs['populated_text'], seed=kwargs['seed'])
@@ -2117,16 +2120,16 @@ class ImpactWildcardEncode:
 
     @staticmethod
     def process_with_loras(**kwargs):
-        return impact.wildcards.process_with_loras(**kwargs)
+        return wildcards.process_with_loras(**kwargs)
 
     @staticmethod
     def get_wildcard_list():
-        return impact.wildcards.get_wildcard_list()
+        return wildcards.get_wildcard_list()
 
     def doit(self, *args, **kwargs):
         populated = kwargs['populated_text']
         processed = []
-        model, clip, conditioning = impact.wildcards.process_with_loras(wildcard_opt=populated, model=kwargs['model'], clip=kwargs['clip'], seed=kwargs['seed'], processed=processed)
+        model, clip, conditioning = wildcards.process_with_loras(wildcard_opt=populated, model=kwargs['model'], clip=kwargs['clip'], seed=kwargs['seed'], processed=processed)
         return model, clip, conditioning, processed[0]
 
 

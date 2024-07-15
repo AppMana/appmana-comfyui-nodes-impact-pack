@@ -1,8 +1,9 @@
-from nodes import MAX_RESOLUTION
-from impact.utils import *
-import impact.core as core
-from impact.core import SEG
-from impact.segs_nodes import SEGSPaste
+from comfy.nodes.common import MAX_RESOLUTION
+from .utils import *
+from . import core
+from .core import SEG
+from .segs_nodes import SEGSPaste
+import comfy.samplers
 
 
 class SEGSDetailerForAnimateDiff:
@@ -123,9 +124,9 @@ class DetailerForEachPipeForAnimateDiff:
         return {"required": {
                       "image_frames": ("IMAGE", ),
                       "segs": ("SEGS", ),
-                      "guide_size": ("FLOAT", {"default": 512, "min": 64, "max": nodes.MAX_RESOLUTION, "step": 8}),
+                      "guide_size": ("FLOAT", {"default": 512, "min": 64, "max": MAX_RESOLUTION, "step": 8}),
                       "guide_size_for": ("BOOLEAN", {"default": True, "label_on": "bbox", "label_off": "crop_region"}),
-                      "max_size": ("FLOAT", {"default": 1024, "min": 64, "max": nodes.MAX_RESOLUTION, "step": 8}),
+                      "max_size": ("FLOAT", {"default": 1024, "min": 64, "max": MAX_RESOLUTION, "step": 8}),
                       "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
                       "steps": ("INT", {"default": 20, "min": 1, "max": 10000}),
                       "cfg": ("FLOAT", {"default": 8.0, "min": 0.0, "max": 100.0}),

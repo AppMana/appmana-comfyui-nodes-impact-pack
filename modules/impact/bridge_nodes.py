@@ -1,12 +1,14 @@
 import os
 from PIL import ImageOps
-from impact.utils import *
-import latent_preview
+
+from comfy.nodes.base_nodes import VAELoader, VAEDecode, PreviewImage
+from .utils import *
+from comfy.cmd import folder_paths
 
 # NOTE: this should not be `from . import core`.
 # I don't know why but... 'from .' and 'from impact' refer to different core modules.
 # This separates global variables of the core module and breaks the preview bridge.
-from impact import core
+from . import core
 # <--
 import random
 
@@ -82,7 +84,7 @@ class PreviewBridge:
             pixels, mask, path_item = PreviewBridge.load_image(image)
             image = [path_item]
         else:
-            res = nodes.PreviewImage().save_images(images, filename_prefix="PreviewBridge/PB-")
+            res = PreviewImage().save_images(images, filename_prefix="PreviewBridge/PB-")
             image2 = res['ui']['images']
             pixels = images
             mask = torch.zeros((64, 64), dtype=torch.float32, device="cpu")
@@ -103,7 +105,7 @@ class PreviewBridge:
 
 def decode_latent(latent, preview_method, vae_opt=None):
     if vae_opt is not None:
-        image = nodes.VAEDecode().decode(vae_opt, latent)[0]
+        image = VAEDecode().decode(vae_opt, latent)[0]
         return image
 
     from comfy.cli_args import LatentPreviewMethod
@@ -120,8 +122,8 @@ def decode_latent(latent, preview_method, vae_opt=None):
             decoder_name = "taesd3"
 
         if decoder_name:
-            vae = nodes.VAELoader().load_vae(decoder_name)[0]
-            image = nodes.VAEDecode().decode(vae, latent)[0]
+            vae = VAELoader().load_vae(decoder_name)[0]
+            image = VAEDecode().decode(vae, latent)[0]
             return image
 
     if preview_method == "Latent2RGB-SD15":
@@ -282,7 +284,7 @@ class PreviewBridgeLatent:
                             }]
             else:
                 mask = torch.ones(latent['samples'].shape[2:], dtype=torch.float32, device="cpu").unsqueeze(0)
-                res = nodes.PreviewImage().save_images(decoded_image, filename_prefix="PreviewBridge/PBL-")
+                res = PreviewImage().save_images(decoded_image, filename_prefix="PreviewBridge/PBL-")
                 res_image = res['ui']['images']
 
             path = os.path.join(folder_paths.get_temp_directory(), 'PreviewBridge', res_image[0]['filename'])

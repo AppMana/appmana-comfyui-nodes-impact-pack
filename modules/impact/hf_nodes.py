@@ -1,6 +1,6 @@
-import comfy
+import comfy.model_management
 import re
-from impact.utils import *
+from .utils import *
 
 hf_transformer_model_urls = [
     "rizvandwiki/gender-classification-2",

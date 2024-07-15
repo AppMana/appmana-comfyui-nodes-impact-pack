@@ -1,14 +1,16 @@
 import copy
+import logging
+
 import torch
-import nodes
-from impact import utils
+import comfy.nodes.base_nodes as nodes
+from . import utils
 from . import segs_nodes
-from thirdparty import noise_nodes
-from server import PromptServer
+from ..thirdparty import noise_nodes
+from comfy.cmd.server import PromptServer
 import asyncio
-import folder_paths
+from comfy.cmd import folder_paths
 import os
-from comfy_extras import nodes_custom_sampler
+from comfy_extras.nodes import nodes_custom_sampler
 import math
 
 

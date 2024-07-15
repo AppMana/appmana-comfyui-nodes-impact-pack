@@ -1,10 +1,12 @@
 import math
-import impact.core as core
-from comfy_extras.nodes_custom_sampler import Noise_RandomNoise
-from impact.utils import *
-from nodes import MAX_RESOLUTION
-import nodes
-from impact.impact_sampling import KSamplerWrapper, KSamplerAdvancedWrapper, separated_sample, impact_sample
+
+from comfy.nodes.common import MAX_RESOLUTION
+from . import core
+from comfy_extras.nodes.nodes_custom_sampler import Noise_RandomNoise
+import comfy_extras.nodes.nodes_gits as node_gits
+from .utils import *
+import comfy.samplers
+from .impact_sampling import KSamplerWrapper, KSamplerAdvancedWrapper, separated_sample, impact_sample
 
 
 class TiledKSamplerProvider:
@@ -275,7 +277,7 @@ class ConcatConditionings:
     @staticmethod
     def doit(**kwargs):
         conditioning_to = list(kwargs.values())[0]
-
+        out = []
         for k, conditioning_from in list(kwargs.items())[1:]:
             out = []
             if len(conditioning_from) > 1:
@@ -654,11 +656,6 @@ class GITSSchedulerFuncProvider:
     FUNCTION = "doit"
 
     def doit(self, coeff, denoise):
-        try:
-            import comfy_extras.nodes_gits as node_gits
-        except Exception:
-            raise Exception("[Impact Pack] ComfyUI is an outdated version.")
-
         def f(model, sampler, steps):
             return node_gits.GITSScheduler().get_sigmas(coeff, steps, denoise)[0]
 

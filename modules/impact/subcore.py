@@ -1,10 +1,8 @@
-from pathlib import Path
 from PIL import Image
 
 from . import core
 import cv2
 import numpy as np
-from torchvision.transforms.functional import to_pil_image
 import torch
 
 from ultralytics import YOLO

@@ -4,24 +4,23 @@ import traceback
 
 from aiohttp import web
 
-import impact
-import folder_paths
+from comfy import model_management
+from comfy.cmd import folder_paths
 
 import torchvision
 
-import impact.core as core
-import impact.impact_pack as impact_pack
-from impact.utils import to_tensor
+from . import core, config
+from . import impact_pack
+from .utils import to_tensor
 from segment_anything import SamPredictor, sam_model_registry
 import numpy as np
-import nodes
+from comfy.nodes import base_nodes as nodes
 from PIL import Image
 import io
-import impact.wildcards as wildcards
-import comfy
+from . import wildcards
 from io import BytesIO
 import random
-from server import PromptServer
+from comfy.cmd.server import PromptServer
 
 
 @PromptServer.instance.routes.post("/upload/temp")
@@ -78,13 +77,13 @@ def async_prepare_sam(image_dir, model_name, filename):
         sam_predictor = SamPredictor(sam_model)
 
         image_path = os.path.join(image_dir, filename)
-        image = nodes.LoadImage().load_image(image_path)[0]
+        image = nodes.LoadImage().load_image(str(image_path))[0]
         image = np.clip(255. * image.cpu().numpy().squeeze(), 0, 255).astype(np.uint8)
 
-        if impact.config.get_config()['sam_editor_cpu']:
+        if config.get_config()['sam_editor_cpu']:
             device = 'cpu'
         else:
-            device = comfy.model_management.get_torch_device()
+            device = model_management.get_torch_device()
 
         sam_predictor.model.to(device=device)
         sam_predictor.set_image(image, "RGB")
@@ -106,7 +105,7 @@ async def sam_prepare(request):
 
         model_name = 'sam_vit_b_01ec64.pth'
         if data['sam_model_name'] == 'auto':
-            model_name = impact.config.get_config()['sam_editor_model']
+            model_name = config.get_config()['sam_editor_model']
 
         model_name = os.path.join(impact_pack.model_path, "sams", model_name)
 
@@ -146,10 +145,10 @@ async def sam_detect(request):
     global sam_predictor
     with sam_lock:
         if sam_predictor is not None:
-            if impact.config.get_config()['sam_editor_cpu']:
+            if config.get_config()['sam_editor_cpu']:
                 device = 'cpu'
             else:
-                device = comfy.model_management.get_torch_device()
+                device = model_management.get_torch_device()
 
             sam_predictor.model.to(device=device)
             try:
@@ -196,13 +195,13 @@ async def sam_detect(request):
 
 @PromptServer.instance.routes.get("/impact/wildcards/refresh")
 async def wildcards_refresh(request):
-    impact.wildcards.wildcard_load()
+    wildcards.wildcard_load()
     return web.Response(status=200)
 
 
 @PromptServer.instance.routes.get("/impact/wildcards/list")
 async def wildcards_list(request):
-    data = {'data': impact.wildcards.get_wildcard_list()}
+    data = {'data': wildcards.get_wildcard_list()}
     return web.json_response(data)
 
 

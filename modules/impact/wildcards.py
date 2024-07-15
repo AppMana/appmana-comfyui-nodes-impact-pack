@@ -1,13 +1,13 @@
 import re
 import random
 import os
-import nodes
-import folder_paths
+from comfy.nodes import base_nodes as nodes
+from comfy.cmd import folder_paths
 import yaml
 import numpy as np
 import threading
-from impact import utils
-from impact import config
+from . import utils
+from . import config
 
 
 wildcards_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "wildcards"))
@@ -45,6 +45,9 @@ def read_wildcard(k, v):
 
 def read_wildcard_dict(wildcard_path):
     global wildcard_dict
+    if not os.path.isdir(wildcard_path):
+        return wildcard_dict
+
     for root, directories, files in os.walk(wildcard_path, followlinks=True):
         for file in files:
             if file.endswith('.txt'):
@@ -511,10 +514,4 @@ def wildcard_load():
 
     with wildcard_lock:
         read_wildcard_dict(wildcards_path)
-
-        try:
-            read_wildcard_dict(config.get_config()['custom_wildcards'])
-        except Exception as e:
-            print(f"[Impact Pack] Failed to load custom wildcards directory.")
-
-        print(f"[Impact Pack] Wildcards loading done.")
+        read_wildcard_dict(config.get_config()['custom_wildcards'])

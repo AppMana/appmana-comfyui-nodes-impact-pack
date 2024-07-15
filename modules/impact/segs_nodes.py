@@ -1,13 +1,14 @@
 import os
 import sys
 
-import impact.impact_server
-from nodes import MAX_RESOLUTION
+from comfy.nodes.common import MAX_RESOLUTION
+import comfy.samplers
+from . import impact_server
 
-from impact.utils import *
+from .utils import *
 from . import core
 from .core import SEG
-import impact.utils as utils
+from . import utils
 from . import defs
 from . import segs_upscaler
 from comfy.cli_args import args
@@ -109,7 +110,7 @@ class SEGSDetailer:
                                                                 refiner_ratio=refiner_ratio, refiner_model=refiner_model,
                                                                 refiner_clip=refiner_clip, refiner_positive=refiner_positive, refiner_negative=refiner_negative,
                                                                 control_net_wrapper=seg.control_net_wrapper, cycle=cycle,
-                                                                inpaint_model=inpaint_model, noise_mask_feather=noise_mask_feather, scheduler_func_opt=scheduler_func_opt)
+                                                                inpaint_model=inpaint_model, noise_mask_feather=noise_mask_feather, scheduler_func=scheduler_func_opt)
 
                 if cnet_pils is not None:
                     cnet_pil_list.extend(cnet_pils)
@@ -1432,7 +1433,7 @@ class SEGSPicker:
 
             cands.append(cropped_image)
 
-        impact.impact_server.segs_picker_map[unique_id] = cands
+        impact_server.segs_picker_map[unique_id] = cands
 
         # pass only selected
         pick_ids = set()

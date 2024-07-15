@@ -3,6 +3,9 @@
 # https://github.com/BlenderNeko/ComfyUI_Noise/pull/13/files
 
 import comfy
+import comfy.samplers
+import comfy.model_management
+import comfy.utils
 import torch
 
 from comfy import sampler_helpers

@@ -1,13 +1,11 @@
-from impact.utils import *
-from impact import impact_sampling
+from .utils import *
+from . import impact_sampling
 from comfy import model_management
-from comfy.cli_args import args
-import nodes
+from comfy.nodes import base_nodes as nodes
+import comfy.utils
 
-try:
-    from comfy_extras import nodes_differential_diffusion
-except Exception:
-    print(f"[Impact Pack] ComfyUI is an outdated version. The DifferentialDiffusion feature will be disabled.")
+
+from comfy_extras.nodes import nodes_differential_diffusion
 
 
 # Implementation based on `https://github.com/lingondricka2/Upscaler-Detailer`
@@ -25,6 +23,7 @@ def upscale_with_model(upscale_model, image):
     overlap = 32
 
     oom = True
+    s: torch.Tensor = torch.zeros(in_img.shape)
     while oom:
         try:
             steps = in_img.shape[0] * comfy.utils.get_tiled_scale_steps(in_img.shape[3], in_img.shape[2], tile_x=tile, tile_y=tile, overlap=overlap)

@@ -1,10 +1,8 @@
-import folder_paths
-
-import impact.mmdet_nodes as mmdet_nodes
-from impact.utils import *
-from impact.core import SEG
-import impact.core as core
-import nodes
+from . import mmdet_nodes
+from .utils import *
+from .core import SEG
+from . import core
+from comfy.nodes import base_nodes as nodes
 
 class NO_BBOX_MODEL:
     pass
@@ -216,7 +214,6 @@ class MaskPainter(nodes.PreviewImage):
                     "prompt": "PROMPT",
                     "extra_pnginfo": "EXTRA_PNGINFO",
                 },
-                "optional": {"mask_image": ("IMAGE_PATH",), },
                 "optional": {"image": (["#placeholder"], )},
                 }
 
@@ -227,7 +224,7 @@ class MaskPainter(nodes.PreviewImage):
     CATEGORY = "ImpactPack/Legacy"
 
     def save_painted_images(self, images, filename_prefix="impact-mask",
-                            prompt=None, extra_pnginfo=None, mask_image=None, image=None):
+                            prompt=None, extra_pnginfo=None, image=None):
         if image == "#placeholder" or image['image_hash'] != id(images):
             # new input image
             res = self.save_images(images, filename_prefix, prompt, extra_pnginfo)

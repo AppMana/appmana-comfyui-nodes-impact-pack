@@ -1,12 +1,13 @@
-from impact.utils import any_typ, ByPassTypeTuple, make_3d_mask
-import comfy_extras.nodes_mask
-from nodes import MAX_RESOLUTION
+from comfy.nodes.common import MAX_RESOLUTION
+from comfy_extras.nodes import nodes_mask
+from .utils import any_typ, ByPassTypeTuple, make_3d_mask
 import torch
 import comfy
+import comfy.utils
 import sys
-import nodes
+from comfy.nodes import base_nodes as nodes
 import re
-from server import PromptServer
+from comfy.cmd.server import PromptServer
 
 
 class GeneralSwitch:
@@ -186,11 +187,9 @@ class ImagePasteMasked:
 
     def composite(self, destination, source, x, y, resize_source, mask = None):
         destination = destination.clone().movedim(-1, 1)
-        output = comfy_extras.nodes_mask.composite(destination, source.movedim(-1, 1), x, y, mask, 1, resize_source).movedim(1, -1)
+        output = nodes_mask.composite(destination, source.movedim(-1, 1), x, y, mask, 1, resize_source).movedim(1, -1)
         return (output,)
 
-
-from impact.utils import any_typ
 
 class ImpactLogger:
     @classmethod

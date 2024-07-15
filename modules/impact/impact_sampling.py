@@ -1,18 +1,15 @@
-import nodes
+from comfy.execution_context import current_execution_context
+from comfy.nodes import base_nodes as nodes
 from comfy.k_diffusion import sampling as k_diffusion_sampling
 from comfy import samplers
-from comfy_extras import nodes_custom_sampler
-import latent_preview
+from comfy.cmd import latent_preview
 import comfy
+import comfy.sample
+import comfy.utils
 import torch
 import math
 
-
-try:
-    from comfy_extras.nodes_custom_sampler import Noise_EmptyNoise, Noise_RandomNoise
-except:
-    print(f"\n#############################################\n[Impact Pack] ComfyUI is an outdated version.\n#############################################\n")
-    raise Exception("[Impact Pack] ComfyUI is an outdated version.")
+from comfy_extras.nodes.nodes_custom_sampler import Noise_EmptyNoise, Noise_RandomNoise
 
 
 def calculate_sigmas(model, sampler, scheduler, steps):
@@ -39,7 +36,11 @@ def get_noise_sampler(x, cpu, total_sigmas, **kwargs):
     return None
 
 
-def ksampler(sampler_name, total_sigmas, extra_options={}, inpaint_options={}):
+def ksampler(sampler_name, total_sigmas, extra_options=None, inpaint_options=None):
+    if inpaint_options is None:
+        inpaint_options = dict()
+    if extra_options is None:
+        extra_options = dict()
     if sampler_name == "dpmpp_sde":
         def sample_dpmpp_sde(model, x, sigmas, **kwargs):
             noise_sampler = get_noise_sampler(x, True, total_sigmas, **kwargs)
@@ -137,7 +138,7 @@ def sample_with_custom_noise(model, add_noise, noise_seed, cfg, positive, negati
     else:
         touched_callback = preview_callback
 
-    disable_pbar = not comfy.utils.PROGRESS_BAR_ENABLED
+    disable_pbar = not current_execution_context().server.receive_all_progress_notifications
     samples = comfy.sample.sample_custom(model, noise, cfg, sampler, sigmas, positive, negative, latent_image, noise_mask=noise_mask, callback=touched_callback, disable_pbar=disable_pbar, seed=noise_seed)
 
     out["samples"] = samples

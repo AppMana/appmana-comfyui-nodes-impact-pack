@@ -1,36 +1,27 @@
-import copy
-import os
+import math
+import time
 import warnings
-
-import numpy
-import torch
-from segment_anything import SamPredictor
-
-from comfy_extras.nodes_custom_sampler import Noise_RandomNoise
-from impact.utils import *
 from collections import namedtuple
-import numpy as np
+from concurrent.futures import ThreadPoolExecutor
+from typing import Callable
+
+from segment_anything import SamPredictor
 from skimage.measure import label
 
-import nodes
-import comfy_extras.nodes_upscale_model as model_upscale
-from server import PromptServer
-import comfy
-import impact.wildcards as wildcards
-import math
-import cv2
-import time
+import comfy.samplers
+import comfy_extras.nodes.nodes_upscale_model as model_upscale
 from comfy import model_management
-from impact import utils
-from impact import impact_sampling
-from concurrent.futures import ThreadPoolExecutor
-
-try:
-    from comfy_extras import nodes_differential_diffusion
-except Exception:
-    print(f"\n#############################################\n[Impact Pack] ComfyUI is an outdated version.\n#############################################\n")
-    raise Exception("[Impact Pack] ComfyUI is an outdated version.")
-
+from comfy.cli_args import args, LatentPreviewMethod
+from comfy.cmd.latent_preview import TAESD, TAESDPreviewerImpl, Latent2RGBPreviewer
+from comfy.nodes.base_nodes import ConditioningConcat, InpaintModelConditioning, ImageScale, LatentComposite, \
+    VAEDecodeTiled, VAEDecode, VAEEncodeTiled, VAEEncode
+from comfy_extras.nodes import nodes_differential_diffusion
+from comfy_extras.nodes.nodes_custom_sampler import Noise_RandomNoise
+from . import impact_sampling
+from . import utils
+from . import wildcards
+# this imports cv2 and others...
+from .utils import *
 
 SEG = namedtuple("SEG",
                  ['cropped_image', 'cropped_mask', 'confidence', 'crop_region', 'bbox', 'label', 'control_net_wrapper'],
@@ -236,7 +227,7 @@ def enhance_detail(image, model, clip, vae, guide_size, guide_size_for_bbox, max
         model, _, wildcard_positive = wildcards.process_with_loras(wildcard_opt, model, clip)
 
         if wildcard_opt_concat_mode == "concat":
-            positive = nodes.ConditioningConcat().concat(positive, wildcard_positive)[0]
+            positive = ConditioningConcat().concat(positive, wildcard_positive)[0]
         else:
             positive = wildcard_positive
 
@@ -301,7 +292,7 @@ def enhance_detail(image, model, clip, vae, guide_size, guide_size_for_bbox, max
 
     # prepare mask
     if noise_mask is not None and inpaint_model:
-        positive, negative, latent_image = nodes.InpaintModelConditioning().encode(positive, negative, upscaled_image, vae, noise_mask)
+        positive, negative, latent_image = InpaintModelConditioning().encode(positive, negative, upscaled_image, vae, noise_mask)
     else:
         latent_image = to_latent_image(upscaled_image, vae)
         if noise_mask is not None:
@@ -377,7 +368,7 @@ def enhance_detail_for_animatediff(image_frames, model, clip, vae, guide_size, g
         model, _, wildcard_positive = wildcards.process_with_loras(wildcard_opt, model, clip)
 
         if wildcard_opt_concat_mode == "concat":
-            positive = nodes.ConditioningConcat().concat(positive, wildcard_positive)[0]
+            positive = ConditioningConcat().concat(positive, wildcard_positive)[0]
         else:
             positive = wildcard_positive
 
@@ -499,7 +490,7 @@ def enhance_detail_for_animatediff(image_frames, model, clip, vae, guide_size, g
     if detailer_hook is not None:
         refined_image_frames = detailer_hook.post_decode(refined_image_frames)
 
-    refined_image_frames = nodes.ImageScale().upscale(image=refined_image_frames, upscale_method='lanczos', width=w, height=h, crop='disabled')[0]
+    refined_image_frames = ImageScale().upscale(image=refined_image_frames, upscale_method='lanczos', width=w, height=h, crop='disabled')[0]
 
     return refined_image_frames, cnet_images
 
@@ -509,7 +500,7 @@ def composite_to(dest_latent, crop_region, src_latent):
     y1 = crop_region[1]
 
     # composite to original latent
-    lc = nodes.LatentComposite()
+    lc = LatentComposite()
     orig_image = lc.composite(dest_latent, src_latent, x1, y1)
 
     return orig_image[0]
@@ -548,13 +539,11 @@ def sam_predict(predictor, points, plabs, bbox, threshold):
 class SAMWrapper:
     def __init__(self, model, is_auto_mode, safe_to_gpu=None):
         self.model = model
-        self.safe_to_gpu = safe_to_gpu if safe_to_gpu is not None else SafeToGPU_stub()
         self.is_auto_mode = is_auto_mode
 
     def prepare_device(self):
         if self.is_auto_mode:
             device = comfy.model_management.get_torch_device()
-            self.safe_to_gpu.to_device(self.model, device=device)
 
     def release_device(self):
         if self.is_auto_mode:
@@ -570,7 +559,10 @@ class SAMWrapper:
 class ESAMWrapper:
     def __init__(self, model, device):
         self.model = model
-        self.func_inference = nodes.NODE_CLASS_MAPPINGS['Yoloworld_ESAM_Zho']
+        from comfy.cmd.execution import nodes
+        zho_node_cls = nodes.NODE_CLASS_MAPPINGS['Yoloworld_ESAM_Zho']
+        assert isinstance(zho_node_cls, Callable)
+        self.func_inference = zho_node_cls()
         self.device = device
 
     def prepare_device(self):
@@ -1032,7 +1024,7 @@ class ONNXDetector:
     def detect(self, image, threshold, dilation, crop_factor, drop_size=1, detailer_hook=None):
         drop_size = max(drop_size, 1)
         try:
-            import impact.onnx as onnx
+            from . import onnx
 
             h = image.shape[1]
             w = image.shape[2]
@@ -1107,6 +1099,7 @@ def mask_to_segs(mask, combined, crop_factor, bbox_fill, drop_size=1, label='A',
         pass  # `mask` is already a NumPy array
     else:
         try:
+            assert mask is not None
             mask = mask.numpy()
         except AttributeError:
             print("[mask_to_segs] Cannot operate: MASK is not a NumPy array or Tensor.")
@@ -1331,9 +1324,9 @@ def segs_to_masklist(segs):
 
 def vae_decode(vae, samples, use_tile, hook, tile_size=512):
     if use_tile:
-        pixels = nodes.VAEDecodeTiled().decode(vae, samples, tile_size)[0]
+        pixels = VAEDecodeTiled().decode(vae, samples, tile_size)[0]
     else:
-        pixels = nodes.VAEDecode().decode(vae, samples)[0]
+        pixels = VAEDecode().decode(vae, samples)[0]
 
     if hook is not None:
         pixels = hook.post_decode(pixels)
@@ -1343,9 +1336,9 @@ def vae_decode(vae, samples, use_tile, hook, tile_size=512):
 
 def vae_encode(vae, pixels, use_tile, hook, tile_size=512):
     if use_tile:
-        samples = nodes.VAEEncodeTiled().encode(vae, pixels, tile_size)[0]
+        samples = VAEEncodeTiled().encode(vae, pixels, tile_size)[0]
     else:
-        samples = nodes.VAEEncode().encode(vae, pixels)[0]
+        samples = VAEEncode().encode(vae, pixels)[0]
 
     if hook is not None:
         samples = hook.post_encode(samples)
@@ -1637,7 +1630,7 @@ class PixelKSampleUpscaler:
                                       upscaled_latent, denoise)
 
         refined_latent = impact_sampling.impact_sample(model, seed, steps, cfg, sampler_name, scheduler,
-                                                       positive, negative, upscaled_latent, denoise, scheduler_func_opt=self.scheduler_func)
+                                                       positive, negative, upscaled_latent, denoise, scheduler_func=self.scheduler_func)
         return refined_latent
 
     def upscale_shape(self, step_info, samples, w, h, save_temp_prefix=None):
@@ -1665,7 +1658,7 @@ class PixelKSampleUpscaler:
                                       upscaled_latent, denoise)
 
         refined_latent = impact_sampling.impact_sample(model, seed, steps, cfg, sampler_name, scheduler,
-                                                       positive, negative, upscaled_latent, denoise, scheduler_func_opt=self.scheduler_func)
+                                                       positive, negative, upscaled_latent, denoise, scheduler_func=self.scheduler_func)
         return refined_latent
 
 
@@ -1997,14 +1990,8 @@ class BBoxDetectorBasedOnCLIPSeg:
 
 
 def update_node_status(node, text, progress=None):
-    if PromptServer.instance.client_id is None:
-        return
-
-    PromptServer.instance.send_sync("impact/update_status", {
-        "node": node,
-        "progress": progress,
-        "text": text
-    }, PromptServer.instance.client_id)
+    # todo: this should not really be used at all
+    return
 
 
 def random_mask_raw(mask, bbox, factor):
@@ -2095,11 +2082,6 @@ class SafeToGPU:
                         print(f"WARN: The model is not moved to the '{device}' due to insufficient memory. [1]")
                 else:
                     print(f"WARN: The model is not moved to the '{device}' due to insufficient memory. [2]")
-
-
-from comfy.cli_args import args, LatentPreviewMethod
-import folder_paths
-from latent_preview import TAESD, TAESDPreviewerImpl, Latent2RGBPreviewer
 
 try:
     import comfy.latent_formats as latent_formats

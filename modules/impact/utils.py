@@ -2,8 +2,11 @@ import torch
 import torchvision
 import cv2
 import numpy as np
-import folder_paths
-import nodes
+
+from comfy import model_management
+from comfy.cmd import folder_paths
+from comfy.cmd.folder_paths import FolderPathsTuple
+from comfy.nodes import base_nodes as nodes
 from . import config
 from PIL import Image, ImageFilter
 from scipy.ndimage import zoom
@@ -378,7 +381,7 @@ def tensor_gaussian_blur_mask(mask, kernel_size, sigma=10.0):
             return mask  # skip feathering
 
     prev_device = mask.device
-    device = comfy.model_management.get_torch_device()
+    device = model_management.get_torch_device()
     mask.to(device)
 
     # apply gaussian blur
@@ -569,13 +572,7 @@ def apply_mask_alpha_to_pil(decoded_pil, mask):
 
 
 def try_install_custom_node(custom_node_url, msg):
-    try:
-        import cm_global
-        cm_global.try_call(api='cm.try-install-custom-node',
-                           sender="Impact Pack", custom_node_url=custom_node_url, msg=msg)
-    except Exception:
-        print(msg)
-        print(f"[Impact Pack] ComfyUI-Manager is outdated. The custom node installation feature is not available.")
+    raise ImportError(f"Install the custom nodes from {custom_node_url} to support: {msg}")
 
 
 # author: Trung0246 --->
@@ -603,24 +600,8 @@ class NonListIterable:
 
 
 def add_folder_path_and_extensions(folder_name, full_folder_paths, extensions):
-    # Iterate over the list of full folder paths
-    for full_folder_path in full_folder_paths:
-        # Use the provided function to add each model folder path
-        folder_paths.add_model_folder_path(folder_name, full_folder_path)
+    folder_paths.folder_names_and_paths[folder_name] += FolderPathsTuple(folder_name, full_folder_paths, extensions)
 
-    # Now handle the extensions. If the folder name already exists, update the extensions
-    if folder_name in folder_paths.folder_names_and_paths:
-        # Unpack the current paths and extensions
-        current_paths, current_extensions = folder_paths.folder_names_and_paths[folder_name]
-        # Update the extensions set with the new extensions
-        updated_extensions = current_extensions | extensions
-        # Reassign the updated tuple back to the dictionary
-        folder_paths.folder_names_and_paths[folder_name] = (current_paths, updated_extensions)
-    else:
-        # If the folder name was not present, add_model_folder_path would have added it with the last path
-        # Now we just need to update the set of extensions as it would be an empty set
-        # Also ensure that all paths are included (since add_model_folder_path adds only one path at a time)
-        folder_paths.folder_names_and_paths[folder_name] = (full_folder_paths, extensions)
 # <---
 
 # wildcard trick is taken from pythongossss's

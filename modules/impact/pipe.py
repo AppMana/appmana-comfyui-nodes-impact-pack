@@ -1,5 +1,5 @@
-import folder_paths
-import impact.wildcards
+from comfy.cmd import folder_paths
+
 
 class ToDetailerPipe:
     @classmethod
