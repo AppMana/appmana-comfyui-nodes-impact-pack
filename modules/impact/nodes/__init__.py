@@ -11,9 +11,7 @@ from ..detectors import *
 from ..hf_nodes import *
 from ..hook_nodes import *
 from ..impact_pack import *
-from ..legacy_nodes import SegsMaskCombine, MaskPainter, MMDetLoader
 from ..logics import *
-from ..mmdet_nodes import MMDetDetectorProvider
 from ..pipe import *
 from ..segs_nodes import *
 from ..special_samplers import *
@@ -365,10 +363,6 @@ NODE_DISPLAY_NAME_MAPPINGS = {
 }
 
 NODE_CLASS_MAPPINGS.update({
-    "MMDetDetectorProvider": MMDetDetectorProvider,
-    "MMDetLoader": MMDetLoader,
-    "MaskPainter": MaskPainter,
-    "SegsMaskCombine": SegsMaskCombine,
     "BboxDetectorForEach": BboxDetectorForEach,
     "SegmDetectorForEach": SegmDetectorForEach,
     "BboxDetectorCombined": BboxDetectorCombined,

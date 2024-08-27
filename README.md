@@ -279,10 +279,6 @@ This custom node helps to conveniently enhance images through Detector, Detailer
   * `Concat Conditionings` - It takes multiple conditionings as input and concat them into a single conditioning.
 
 
-## MMDet nodes (DEPRECATED) - Don't use these nodes
-* MMDetDetectorProvider - Loads the MMDet model to provide BBOX_DETECTOR and SEGM_DETECTOR.
-* To use the existing MMDetDetectorProvider, you need to enable the MMDet usage configuration.
-
 
 ## Feature
 * `Interactive SAM Detector (Clipspace)` - When you right-click on a node that has 'MASK' and 'IMAGE' outputs, a context menu will open. From this menu, you can either open a dialog to create a SAM Mask using 'Open in SAM Detector', or copy the content (likely mask data) using 'Copy (Clipspace)' and generate a mask using 'Impact SAM Detector' from the clipspace menu, and then paste it using 'Paste (Clipspace)'.
@@ -292,35 +288,18 @@ This custom node helps to conveniently enhance images through Detector, Detailer
 ## Deprecated
 * The following nodes have been kept only for compatibility with existing workflows, and are no longer supported. Please replace them with new nodes.
    * ONNX Detector (SEGS) - BBOX Detector (SEGS)
-   * MMDetLoader -> MMDetDetectorProvider
    * SegsMaskCombine -> SEGS to MASK (combined)
    * BboxDetectorForEach -> BBOX Detector (SEGS)
    * SegmDetectorForEach -> SEGM Detector (SEGS)
    * BboxDetectorCombined -> BBOX Detector (combined)
    * SegmDetectorCombined -> SEGM Detector (combined)
    * MaskPainter -> PreviewBridge
-* To use the existing deprecated legacy nodes, you need to enable the MMDet usage configuration.
 
 
 ## Ultralytics models
 * huggingface.co/Bingsu/[adetailer](https://github.com/ultralytics/assets/releases/) - You can download face, people detection models, and clothing detection models.
 * ultralytics/[assets](https://github.com/ultralytics/assets/releases/) - You can download various types of detection models other than faces or people.
 * civitai/[adetailer](https://civitai.com/search/models?sortBy=models_v5&query=adetailer) - You can download various types detection models....Many models are associated with NSFW content.
-
-## How to activate 'MMDet usage' (DEPRECATED)
-* Upon the initial execution, an `impact-pack.ini` file will be generated in the custom_nodes/ComfyUI-Impact-Pack directory.
-```
-[default]
-dependency_version = 2
-mmdet_skip = True
-```
-* Change `mmdet_skip = True` to `mmdet_skip = False`
-```
-[default]
-dependency_version = 2
-mmdet_skip = False
-```
-* Restart ComfyUI
 
 
 ## Installation
@@ -350,9 +329,6 @@ mmdet_skip = False
    * piexif
    * (optional) pycocotools
    * (optional) onnxruntime
-   
-* mim install (deprecated)
-   * mmcv==2.0.0, mmdet==3.0.0, mmengine==0.7.2
 
 * linux packages (ubuntu)
   * libgl1-mesa-glx
@@ -362,7 +338,6 @@ mmdet_skip = False
 ## Config example
 * Once you run the Impact Pack for the first time, an `impact-pack.ini` file will be automatically generated in the Impact Pack directory. You can modify this configuration file to customize the default behavior.
   * `dependency_version` - don't touch this
-  * `mmdet_skip` - disable MMDet based nodes and legacy nodes if `True`
   * `sam_editor_cpu` - use cpu for `SAM editor` instead of gpu
   * sam_editor_model: Specify the SAM model for the SAM editor.
     * You can download various SAM models using ComfyUI-Manager.
@@ -370,7 +345,6 @@ mmdet_skip = False
 ```
 [default]
 dependency_version = 9
-mmdet_skip = True
 sam_editor_cpu = False
 sam_editor_model = sam_vit_b_01ec64.pth
 ```
@@ -378,8 +352,6 @@ sam_editor_model = sam_vit_b_01ec64.pth
 
 ## Other Materials (auto-download on initial startup)
 
-* ComfyUI/models/mmdets/bbox <= https://huggingface.co/dustysys/ddetailer/resolve/main/mmdet/bbox/mmdet_anime-face_yolov3.pth
-* ComfyUI/models/mmdets/bbox <= https://raw.githubusercontent.com/Bing-su/dddetailer/master/config/mmdet_anime-face_yolov3.py
 * ComfyUI/models/sams <= https://dl.fbaipublicfiles.com/segment_anything/sam_vit_b_01ec64.pth
 
 ## Troubleshooting page
