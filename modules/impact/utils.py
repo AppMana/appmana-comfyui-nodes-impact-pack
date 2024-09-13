@@ -5,7 +5,7 @@ import numpy as np
 
 from comfy import model_management
 from comfy.cmd import folder_paths
-from comfy.cmd.folder_paths import FolderPathsTuple
+from comfy.component_model.folder_path_types import FolderPathsTuple
 from comfy.nodes import base_nodes as nodes
 from . import config
 from PIL import Image, ImageFilter
