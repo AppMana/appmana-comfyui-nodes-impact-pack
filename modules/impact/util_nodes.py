@@ -1,13 +1,14 @@
+import re
+import sys
+
+import torch
+
+import comfy
+import comfy.utils
+from comfy.nodes import base_nodes as nodes
 from comfy.nodes.common import MAX_RESOLUTION
 from comfy_extras.nodes import nodes_mask
 from .utils import any_typ, ByPassTypeTuple, make_3d_mask
-import torch
-import comfy
-import comfy.utils
-import sys
-from comfy.nodes import base_nodes as nodes
-import re
-from comfy.cmd.server import PromptServer
 
 
 class GeneralSwitch:
@@ -195,11 +196,11 @@ class ImpactLogger:
     @classmethod
     def INPUT_TYPES(s):
         return {"required": {
-                        "data": (any_typ, ""),
-                        "text": ("STRING", {"multiline": True}),
-                    },
-                "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO", "unique_id": "UNIQUE_ID"},
-                }
+            "data": ("*", ),
+            "text": ("STRING", {"multiline": True}),
+        },
+            "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO", "unique_id": "UNIQUE_ID"},
+        }
 
     CATEGORY = "ImpactPack/Debug"
 
@@ -209,23 +210,6 @@ class ImpactLogger:
     FUNCTION = "doit"
 
     def doit(self, data, text, prompt, extra_pnginfo, unique_id):
-        shape = ""
-        if hasattr(data, "shape"):
-            shape = f"{data.shape} / "
-
-        print(f"[IMPACT LOGGER]: {shape}{data}")
-
-        print(f"         PROMPT: {prompt}")
-
-        # for x in prompt:
-        #     if 'inputs' in x and 'populated_text' in x['inputs']:
-        #         print(f"PROMPT: {x['10']['inputs']['populated_text']}")
-        #
-        # for x in extra_pnginfo['workflow']['nodes']:
-        #     if x['type'] == 'ImpactWildcardProcessor':
-        #         print(f" WV : {x['widgets_values'][1]}\n")
-
-        PromptServer.instance.send_sync("impact-node-feedback", {"node_id": unique_id, "widget_name": "text", "type": "TEXT", "value": f"{data}"})
         return {}
 
 
