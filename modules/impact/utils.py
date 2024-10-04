@@ -8,8 +8,7 @@ from comfy.cmd import folder_paths
 from comfy.component_model.folder_path_types import FolderPathsTuple
 from comfy.nodes import base_nodes as nodes
 from . import config
-from PIL import Image, ImageFilter
-from scipy.ndimage import zoom
+from PIL import Image
 import comfy
 
 
@@ -540,6 +539,16 @@ def make_3d_mask(mask):
     return mask
 
 
+def make_4d_mask(mask):
+    if len(mask.shape) == 3:
+        return mask.unsqueeze(0)
+
+    elif len(mask.shape) == 2:
+        return mask.unsqueeze(0).unsqueeze(0)
+
+    return mask
+
+
 def is_same_device(a, b):
     a_device = torch.device(a) if isinstance(a, str) else a
     b_device = torch.device(b) if isinstance(b, str) else b
@@ -559,7 +568,8 @@ from torchvision.transforms.functional import to_pil_image
 
 
 def resize_mask(mask, size):
-    resized_mask = torch.nn.functional.interpolate(mask.unsqueeze(0), size=size, mode='bilinear', align_corners=False)
+    mask = make_4d_mask(mask)
+    resized_mask = torch.nn.functional.interpolate(mask, size=size, mode='bilinear', align_corners=False)
     return resized_mask.squeeze(0)
 
 
@@ -569,6 +579,14 @@ def apply_mask_alpha_to_pil(decoded_pil, mask):
     decoded_rgba.putalpha(mask_pil)
 
     return decoded_rgba
+
+
+def flatten_mask(all_masks):
+    merged_mask = (all_masks[0] * 255).to(torch.uint8)
+    for mask in all_masks[1:]:
+        merged_mask |= (mask * 255).to(torch.uint8)
+
+    return merged_mask
 
 
 def try_install_custom_node(custom_node_url, msg):

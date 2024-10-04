@@ -1,3 +1,4 @@
+import logging
 import re
 import sys
 
@@ -9,28 +10,46 @@ from comfy.nodes import base_nodes as nodes
 from comfy.nodes.common import MAX_RESOLUTION
 from comfy_extras.nodes import nodes_mask
 from .utils import any_typ, ByPassTypeTuple, make_3d_mask
-
+import inspect
 
 class GeneralSwitch:
     @classmethod
     def INPUT_TYPES(s):
-        return {"required": {
-                    "select": ("INT", {"default": 1, "min": 1, "max": 999999, "step": 1}),
-                    "sel_mode": ("BOOLEAN", {"default": True, "label_on": "select_on_prompt", "label_off": "select_on_execution", "forceInput": False}),
+        dyn_inputs = {"input1": (any_typ, {"lazy": True, "tooltip": "Any input. When connected, one more input slot is added."}), }
+        if True:
+            stack = inspect.stack()
+            if stack[2].function == 'get_input_info' and stack[3].function == 'add_node':
+                for x in range(2, 200):
+                    dyn_inputs[f"input{x}"] = (any_typ, {"lazy": True})
+
+        inputs = {"required": {
+                    "select": ("INT", {"default": 1, "min": 1, "max": 999999, "step": 1, "tooltip": "The input number you want to output among the inputs"}),
+                    "sel_mode": ("BOOLEAN", {"default": False, "label_on": "select_on_prompt", "label_off": "select_on_execution", "forceInput": False,
+                                             "tooltip": "In the case of 'select_on_execution', the selection is dynamically determined at the time of workflow execution. 'select_on_prompt' is an option that exists for older versions of ComfyUI, and it makes the decision before the workflow execution."}),
                     },
-                "optional": {
-                    "input1": (any_typ,),
-                    },
+                "optional": dyn_inputs,
                 "hidden": {"unique_id": "UNIQUE_ID", "extra_pnginfo": "EXTRA_PNGINFO"}
                 }
 
+        return inputs
+
     RETURN_TYPES = (any_typ, "STRING", "INT")
     RETURN_NAMES = ("selected_value", "selected_label", "selected_index")
+    OUTPUT_TOOLTIPS = ("Output is generated only from the input chosen by the 'select' value.", "Slot label of the selected input slot", "Outputs the select value as is")
     FUNCTION = "doit"
 
     CATEGORY = "ImpactPack/Util"
 
-    def doit(self, *args, **kwargs):
+    def check_lazy_status(self, *args, **kwargs):
+        selected_index = int(kwargs['select'])
+        input_name = f"input{selected_index}"
+
+        print(f"SELECTED: {input_name}")
+
+        return [input_name]
+
+    @staticmethod
+    def doit(*args, **kwargs):
         selected_index = int(kwargs['select'])
         input_name = f"input{selected_index}"
 
@@ -52,11 +71,10 @@ class GeneralSwitch:
             print(f"[Impact-Pack] The switch node does not guarantee proper functioning in API mode.")
 
         if input_name in kwargs:
-            return (kwargs[input_name], selected_label, selected_index)
+            return kwargs[input_name], selected_label, selected_index
         else:
             print(f"ImpactSwitch: invalid select index (ignored)")
-            return (None, "", selected_index)
-
+            return None, "", selected_index
 
 class LatentSwitch:
     @classmethod
@@ -128,23 +146,44 @@ class GeneralInversedSwitch:
     @classmethod
     def INPUT_TYPES(s):
         return {"required": {
-                    "select": ("INT", {"default": 1, "min": 1, "max": 999999, "step": 1}),
-                    "input": (any_typ,),
+                    "select": ("INT", {"default": 1, "min": 1, "max": 999999, "step": 1, "tooltip": "The output number you want to send from the input"}),
+                    "input": (any_typ, {"tooltip": "Any input. When connected, one more input slot is added."}),
+
                     },
-                "hidden": {"unique_id": "UNIQUE_ID"},
+                "optional": {
+                    "sel_mode": ("BOOLEAN", {"default": False, "label_on": "select_on_prompt", "label_off": "select_on_execution", "forceInput": False,
+                                             "tooltip": "In the case of 'select_on_execution', the selection is dynamically determined at the time of workflow execution. 'select_on_prompt' is an option that exists for older versions of ComfyUI, and it makes the decision before the workflow execution."}),
+                    },
+                "hidden": {"prompt": "PROMPT", "unique_id": "UNIQUE_ID"},
                 }
 
     RETURN_TYPES = ByPassTypeTuple((any_typ, ))
+    OUTPUT_TOOLTIPS = ("Output occurs only from the output selected by the 'select' value.\nWhen slots are connected, additional slots are created.", )
     FUNCTION = "doit"
 
     CATEGORY = "ImpactPack/Util"
 
-    def doit(self, select, input, unique_id):
+    def doit(self, select, prompt, unique_id, input, **kwargs):
+        if core.is_execution_model_version_supported:
+            from comfy_execution.graph import ExecutionBlocker
+        else:
+            print("[Impact Pack] InversedSwitch: ComfyUI is outdated. The 'select_on_execution' mode cannot function properly.")
+
         res = []
 
-        for i in range(0, select):
+        # search max output count in prompt
+        cnt = 0
+        for x in prompt.values():
+            for y in x.get('inputs', {}).values():
+                if isinstance(y, list) and len(y) == 2:
+                    if y[0] == unique_id:
+                        cnt = max(cnt, y[1])
+
+        for i in range(0, cnt + 1):
             if select == i+1:
                 res.append(input)
+            elif core.is_execution_model_version_supported:
+                res.append(ExecutionBlocker(None))
             else:
                 res.append(None)
 
@@ -196,11 +235,11 @@ class ImpactLogger:
     @classmethod
     def INPUT_TYPES(s):
         return {"required": {
-            "data": ("*", ),
-            "text": ("STRING", {"multiline": True}),
-        },
-            "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO", "unique_id": "UNIQUE_ID"},
-        }
+                        "data": (any_typ,),
+                        "text": ("STRING", {"multiline": True}),
+                    },
+                "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO", "unique_id": "UNIQUE_ID"},
+                }
 
     CATEGORY = "ImpactPack/Debug"
 
@@ -210,6 +249,7 @@ class ImpactLogger:
     FUNCTION = "doit"
 
     def doit(self, data, text, prompt, extra_pnginfo, unique_id):
+        logging.info(f"{text} {data} {prompt}")
         return {}
 
 
@@ -335,6 +375,50 @@ class ImageBatchToImageList:
         return (images, )
 
 
+class MakeAnyList:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {},
+            "optional": {"value1": (any_typ,), }
+        }
+
+    RETURN_TYPES = (any_typ,)
+    OUTPUT_IS_LIST = (True,)
+    FUNCTION = "doit"
+
+    CATEGORY = "ImpactPack/Util"
+
+    def doit(self, **kwargs):
+        values = []
+
+        for k, v in kwargs.items():
+            if v is not None:
+                values.append(v)
+
+        return (values, )
+
+
+class MakeMaskList:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {"mask1": ("MASK",), }}
+
+    RETURN_TYPES = ("MASK",)
+    OUTPUT_IS_LIST = (True,)
+    FUNCTION = "doit"
+
+    CATEGORY = "ImpactPack/Util"
+
+    def doit(self, **kwargs):
+        masks = []
+
+        for k, v in kwargs.items():
+            masks.append(v)
+
+        return (masks, )
+
+
 class MakeImageList:
     @classmethod
     def INPUT_TYPES(s):
@@ -378,6 +462,31 @@ class MakeImageBatch:
                     image2 = comfy.utils.common_upscale(image2.movedim(-1, 1), image1.shape[2], image1.shape[1], "lanczos", "center").movedim(1, -1)
                 image1 = torch.cat((image1, image2), dim=0)
             return (image1,)
+
+
+class MakeMaskBatch:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {"mask1": ("MASK",), }}
+
+    RETURN_TYPES = ("MASK",)
+    FUNCTION = "doit"
+
+    CATEGORY = "ImpactPack/Util"
+
+    def doit(self, **kwargs):
+        mask1 = kwargs['mask1']
+        del kwargs['mask1']
+        masks = [utils.make_3d_mask(value) for value in kwargs.values()]
+
+        if len(masks) == 0:
+            return (mask1,)
+        else:
+            for mask2 in masks:
+                if mask1.shape[1:] != mask2.shape[1:]:
+                    mask2 = comfy.utils.common_upscale(mask2.movedim(-1, 1), mask1.shape[2], mask1.shape[1], "lanczos", "center").movedim(1, -1)
+                mask1 = torch.cat((mask1, mask2), dim=0)
+            return (mask1,)
 
 
 class ReencodeLatent:
@@ -530,14 +639,17 @@ class WildcardPromptFromString:
             delimiter = "\n"
 
         # some sanity checks and normalization for later processing
-        if prefix_all is None: prefix_all = ""
-        if postfix_all is None: postfix_all = ""
-        if restrict_to_tags is None: restrict_to_tags = ""
-        if exclude_tags is None: exclude_tags = ""
-        if not isinstance(restrict_to_tags, list):
-            restrict_to_tags = restrict_to_tags.split(", ")
-        if not isinstance(exclude_tags, list):
-            exclude_tags = exclude_tags.split(", ")
+        if prefix_all is None:
+            prefix_all = ""
+        if postfix_all is None:
+            postfix_all = ""
+        if restrict_to_tags is None:
+            restrict_to_tags = ""
+        if exclude_tags is None:
+            exclude_tags = ""
+
+        restrict_to_tags = restrict_to_tags.split(", ")
+        exclude_tags = exclude_tags.split(", ")
 
         # build the wildcard prompt per list entry
         output = ["[LAB]"]
@@ -547,10 +659,10 @@ class WildcardPromptFromString:
             labels.append(label)
             x = x.split(", ")
             # restrict to tags
-            if restrict_to_tags != "":
+            if restrict_to_tags != [""]:
                 x = list(set(x) & set(restrict_to_tags))
             # remove tags
-            if exclude_tags != "":
+            if exclude_tags != [""]:
                 x = list(set(x) - set(exclude_tags))
             # next row: <LABEL> <PREFIX> <TAGS> <POSTFIX>
             prompt_for_seg = f'[{label}] {prefix_all} {", ".join(x)} {postfix_all}'.strip()
@@ -563,4 +675,4 @@ class WildcardPromptFromString:
         output = re.sub(r',,+', ',', output)
         output = re.sub(r'\n, ', '\n', output)
 
-        return (output, ", ".join(labels),)
+        return output, ", ".join(labels)

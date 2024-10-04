@@ -237,7 +237,7 @@ app.registerExtension({
 		if(nodeData.name == "ImpactControlBridge") {
 			const onConnectionsChange = nodeType.prototype.onConnectionsChange;
 			nodeType.prototype.onConnectionsChange = function (type, index, connected, link_info) {
-				if(!link_info || this.inputs[0].type != '*')
+				if(index != 0 || !link_info || this.inputs[0].type != '*')
 					return;
 
 				// assign type
@@ -383,7 +383,7 @@ app.registerExtension({
 				}
 
 				let select_slot = this.inputs.find(x => x.name == "select");
-				if(this.widgets) {
+				if(this.widgets?.length) {
 					this.widgets[0].options.max = select_slot?this.outputs.length-1:this.outputs.length;
 					this.widgets[0].value = Math.min(this.widgets[0].value, this.widgets[0].options.max);
 					if(this.widgets[0].options.max > 0 && this.widgets[0].value == 0)
@@ -393,7 +393,8 @@ app.registerExtension({
 		}
 
 		if (nodeData.name === 'ImpactMakeImageList' || nodeData.name === 'ImpactMakeImageBatch' ||
-			nodeData.name === 'CombineRegionalPrompts' ||
+		    nodeData.name === 'ImpactMakeMaskList' || nodeData.name === 'ImpactMakeMaskBatch' ||
+			nodeData.name === 'ImpactMakeAnyList' || nodeData.name === 'CombineRegionalPrompts' ||
 			nodeData.name === 'ImpactCombineConditionings' || nodeData.name === 'ImpactConcatConditionings' ||
 			nodeData.name === 'ImpactSEGSConcat' ||
 			nodeData.name === 'ImpactSwitch' || nodeData.name === 'LatentSwitch' || nodeData.name == 'SEGSSwitch') {
@@ -403,6 +404,15 @@ app.registerExtension({
 			case 'ImpactMakeImageList':
 			case 'ImpactMakeImageBatch':
 				input_name = "image";
+				break;
+
+			case 'ImpactMakeMaskList':
+			case 'ImpactMakeMaskBatch':
+				input_name = "mask";
+				break;
+
+			case 'ImpactMakeAnyList':
+				input_name = "value";
 				break;
 
 			case 'ImpactSEGSConcat':
@@ -507,7 +517,7 @@ app.registerExtension({
 						!stackTrace.includes('LGraphNode.connect') && // for mouse device
 						!stackTrace.includes('loadGraphData') &&
 						this.inputs[index].name != 'select') {
-						this.removeInput(index);
+						    this.removeInput(index);
 					}
 				}
 
@@ -527,7 +537,7 @@ app.registerExtension({
 						this.addInput(`${input_name}${slot_i}`, this.outputs[0].type);
 				}
 
-				if(this.widgets) {
+				if(this.widgets?.length) {
 					this.widgets[0].options.max = select_slot?this.inputs.length-1:this.inputs.length;
 					this.widgets[0].value = Math.min(this.widgets[0].value, this.widgets[0].options.max);
 					if(this.widgets[0].options.max > 0 && this.widgets[0].value == 0)
@@ -598,7 +608,7 @@ app.registerExtension({
 			node.onDrawForeground = function (ctx) {
 				const r = orig_draw?.apply?.(this, arguments);
 
-				let is_seg = model_name_widget.value.startsWith('segm/') || model_name_widget.value.includes('-seg');
+				let is_seg = model_name_widget.value?.startsWith('segm/') || model_name_widget.value?.includes('-seg');
 				if(!is_seg) {
 					var slot_pos = new Float32Array(2);
 					var pos = node.getConnectionPos(false, 1, slot_pos);

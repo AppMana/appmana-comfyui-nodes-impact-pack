@@ -44,6 +44,7 @@ NODE_CLASS_MAPPINGS = {
     "FromDetailerPipe": FromDetailerPipe,
     "FromDetailerPipe_v2": FromDetailerPipe_v2,
     "FromDetailerPipeSDXL": FromDetailerPipe_SDXL,
+    "AnyPipeToBasic": AnyPipeToBasic,
     "ToBasicPipe": ToBasicPipe,
     "FromBasicPipe": FromBasicPipe,
     "FromBasicPipe_v2": FromBasicPipe_v2,
@@ -89,6 +90,7 @@ NODE_CLASS_MAPPINGS = {
     "ImpactSegsAndMask": SegsBitwiseAndMask,
     "ImpactSegsAndMaskForEach": SegsBitwiseAndMaskForEach,
     "EmptySegs": EmptySEGS,
+    "ImpactFlattenMask": FlattenMask,
 
     "MediaPipeFaceMeshToSEGS": MediaPipeFaceMeshToSEGS,
     "MaskToSEGS": MaskToSEGS,
@@ -136,6 +138,8 @@ NODE_CLASS_MAPPINGS = {
     "KSamplerAdvancedProvider": KSamplerAdvancedProvider,
     "TwoAdvancedSamplersForMask": TwoAdvancedSamplersForMask,
 
+    "ImpactNegativeConditioningPlaceholder": NegativeConditioningPlaceholder,
+
     "PreviewBridge": PreviewBridge,
     "PreviewBridgeLatent": PreviewBridgeLatent,
     "ImageSender": ImageSender,
@@ -163,6 +167,7 @@ NODE_CLASS_MAPPINGS = {
     "ImpactSEGSConcat": SEGSConcat,
     "ImpactSEGSPicker": SEGSPicker,
     "ImpactMakeTileSEGS": MakeTileSEGS,
+    "ImpactSEGSMerge": SEGSMerge,
 
     "SEGSDetailerForAnimateDiff": SEGSDetailerForAnimateDiff,
 
@@ -175,6 +180,9 @@ NODE_CLASS_MAPPINGS = {
     "ImpactImageBatchToImageList": ImageBatchToImageList,
     "ImpactMakeImageList": MakeImageList,
     "ImpactMakeImageBatch": MakeImageBatch,
+    "ImpactMakeAnyList": MakeAnyList,
+    "ImpactMakeMaskList": MakeMaskList,
+    "ImpactMakeMaskBatch": MakeMaskBatch,
 
     "RegionalSampler": RegionalSampler,
     "RegionalSamplerAdvanced": RegionalSamplerAdvanced,
@@ -197,6 +205,7 @@ NODE_CLASS_MAPPINGS = {
     "ImpactLogicalOperators": ImpactLogicalOperators,
     "ImpactInt": ImpactInt,
     "ImpactFloat": ImpactFloat,
+    "ImpactBoolean": ImpactBoolean,
     "ImpactValueSender": ImpactValueSender,
     "ImpactValueReceiver": ImpactValueReceiver,
     "ImpactImageInfo": ImpactImageInfo,
@@ -207,6 +216,7 @@ NODE_CLASS_MAPPINGS = {
     "ImpactStringSelector": StringSelector,
     "StringListToString": StringListToString,
     "WildcardPromptFromString": WildcardPromptFromString,
+    "ImpactExecutionOrderController": ImpactExecutionOrderController,
 
     "RemoveNoiseMask": RemoveNoiseMask,
 
@@ -230,6 +240,7 @@ NODE_CLASS_MAPPINGS = {
     "GITSSchedulerFuncProvider": GITSSchedulerFuncProvider
 }
 
+
 NODE_DISPLAY_NAME_MAPPINGS = {
     "SAMLoader": "SAMLoader (Impact)",
 
@@ -239,8 +250,8 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "ImpactSimpleDetectorSEGS_for_AD": "Simple Detector for AnimateDiff (SEGS)",
     "ImpactSimpleDetectorSEGS": "Simple Detector (SEGS)",
     "ImpactSimpleDetectorSEGSPipe": "Simple Detector (SEGS/pipe)",
-    "ImpactControlNetApplySEGS": "ControlNetApply (SEGS)",
-    "ImpactControlNetApplyAdvancedSEGS": "ControlNetApplyAdvanced (SEGS)",
+    "ImpactControlNetApplySEGS": "ControlNetApply (SEGS) - DEPRECATED",
+    "ImpactControlNetApplyAdvancedSEGS": "ControlNetApply (SEGS)",
     "ImpactIPAdapterApplySEGS": "IPAdapterApply (SEGS)",
 
     "BboxDetectorCombined_v2": "BBOX Detector (combined)",
@@ -256,6 +267,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "BitwiseAndMask": "Pixelwise(MASK & MASK)",
     "SubtractMask": "Pixelwise(MASK - MASK)",
     "AddMask": "Pixelwise(MASK + MASK)",
+    "ImpactFlattenMask": "Flatten Mask Batch",
     "DetailerForEach": "Detailer (SEGS)",
     "DetailerForEachPipe": "Detailer (SEGS/pipe)",
     "DetailerForEachDebug": "DetailerDebug (SEGS)",
@@ -278,6 +290,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "DetailerPipeToBasicPipe": "DetailerPipe -> BasicPipe",
     "EditBasicPipe": "Edit BasicPipe",
     "EditDetailerPipe": "Edit DetailerPipe",
+    "AnyPipeToBasic": "Any PIPE -> BasicPipe",
 
     "LatentPixelScale": "Latent Scale (on Pixel Space)",
     "IterativeLatentUpscale": "Iterative Upscale (Latent/on Pixel Space)",
@@ -300,6 +313,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "ImpactSEGSToMaskBatch": "SEGS to Mask Batch",
     "ImpactSEGSPicker": "Picker (SEGS)",
     "ImpactMakeTileSEGS": "Make Tile SEGS",
+    "ImpactSEGSMerge": "SEGS Merge",
 
     "ImpactDecomposeSEGS": "Decompose (SEGS)",
     "ImpactAssembleSEGS": "Assemble (SEGS)",
@@ -322,13 +336,19 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "ImageMaskSwitch": "Switch (images, mask)",
     "ImpactSwitch": "Switch (Any)",
     "ImpactInversedSwitch": "Inversed Switch (Any)",
+    "ImpactExecutionOrderController": "Execution Order Controller",
 
-    "MasksToMaskList": "Masks to Mask List",
-    "MaskListToMaskBatch": "Mask List to Masks",
-    "ImpactImageBatchToImageList": "Image batch to Image List",
+    "MasksToMaskList": "Mask Batch to Mask List",
+    "MaskListToMaskBatch": "Mask List to Mask Batch",
+    "ImpactImageBatchToImageList": "Image Batch to Image List",
     "ImageListToImageBatch": "Image List to Image Batch",
+
     "ImpactMakeImageList": "Make Image List",
     "ImpactMakeImageBatch": "Make Image Batch",
+    "ImpactMakeMaskList": "Make Mask List",
+    "ImpactMakeMaskBatch": "Make Mask Batch",
+    "ImpactMakeAnyList": "Make List (Any)",
+
     "ImpactStringSelector": "String Selector",
     "StringListToString": "String List to String",
     "WildcardPromptFromString": "Wildcard Prompt from String",
@@ -360,6 +380,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
 
     "ImpactSchedulerAdapter": "Impact Scheduler Adapter",
     "GITSSchedulerFuncProvider": "GITSScheduler Func Provider",
+    "ImpactNegativeConditioningPlaceholder": "Negative Cond Placeholder"
 }
 
 NODE_CLASS_MAPPINGS.update({

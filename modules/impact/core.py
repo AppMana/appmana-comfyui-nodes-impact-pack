@@ -1,3 +1,4 @@
+import inspect
 import math
 import time
 import warnings
@@ -31,9 +32,17 @@ pb_id_cnt = time.time()
 preview_bridge_image_id_map = {}
 preview_bridge_image_name_map = {}
 preview_bridge_cache = {}
+current_prompt = None
+
+SCHEDULERS = comfy.samplers.KSampler.SCHEDULERS + ['AYS SDXL', 'AYS SD1', 'AYS SVD', 'GITS[coeff=1.2]']
 
 
-SCHEDULERS = comfy.samplers.KSampler.SCHEDULERS + ['AYS SDXL', 'AYS SD1', 'AYS SVD']
+def is_execution_model_version_supported():
+    try:
+        import comfy_execution
+        return True
+    except:
+        return False
 
 
 def set_previewbridge_image(node_id, file, item):
@@ -220,7 +229,7 @@ def enhance_detail(image, model, clip, vae, guide_size, guide_size_for_bbox, max
         noise_mask = utils.tensor_gaussian_blur_mask(noise_mask, noise_mask_feather)
         noise_mask = noise_mask.squeeze(3)
 
-        if noise_mask_feather > 0:
+        if noise_mask_feather > 0 and 'denoise_mask_function' not in model.model_options:
             model = nodes_differential_diffusion.DifferentialDiffusion().apply(model)[0]
 
     if wildcard_opt is not None and wildcard_opt != "":
@@ -230,6 +239,11 @@ def enhance_detail(image, model, clip, vae, guide_size, guide_size_for_bbox, max
             positive = ConditioningConcat().concat(positive, wildcard_positive)[0]
         else:
             positive = wildcard_positive
+            positive = [positive[0].copy()]
+            if 'pooled_output' in wildcard_positive[0][1]:
+                positive[0][1]['pooled_output'] = wildcard_positive[0][1]['pooled_output']
+            elif 'pooled_output' in positive[0][1]:
+                del positive[0][1]['pooled_output']
 
     h = image.shape[1]
     w = image.shape[2]
@@ -361,7 +375,7 @@ def enhance_detail_for_animatediff(image_frames, model, clip, vae, guide_size, g
         noise_mask = utils.tensor_gaussian_blur_mask(noise_mask, noise_mask_feather)
         noise_mask = noise_mask.squeeze(3)
 
-    if noise_mask_feather > 0:
+    if noise_mask_feather > 0 and 'denoise_mask_function' not in model.model_options:
         model = nodes_differential_diffusion.DifferentialDiffusion().apply(model)[0]
 
     if wildcard_opt is not None and wildcard_opt != "":
@@ -583,6 +597,9 @@ class ESAMWrapper:
 
 def make_sam_mask(sam, segs, image, detection_hint, dilation,
                   threshold, bbox_expansion, mask_hint_threshold, mask_hint_use_negative):
+
+    if not hasattr(sam, 'sam_wrapper'):
+        raise Exception("[Impact Pack] Invalid SAMLoader is connected. Make sure 'SAMLoader (Impact)'.\nKnown issue: The ComfyUI-YOLO node overrides the SAMLoader (Impact), making it unusable. You need to uninstall ComfyUI-YOLO.\n\n\n")
 
     sam_obj = sam.sam_wrapper
     sam_obj.prepare_device()
@@ -850,6 +867,10 @@ def every_three_pick_last(stacked_masks):
 
 def make_sam_mask_segmented(sam, segs, image, detection_hint, dilation,
                             threshold, bbox_expansion, mask_hint_threshold, mask_hint_use_negative):
+
+    if not hasattr(sam, 'sam_wrapper'):
+        raise Exception("[Impact Pack] Invalid SAMLoader is connected. Make sure 'SAMLoader (Impact)'.")
+
     sam_obj = sam.sam_wrapper
     sam_obj.prepare_device()
 
@@ -1189,7 +1210,7 @@ def mask_to_segs(mask, combined, crop_factor, bbox_fill, drop_size=1, label='A',
                         cropped_mask[by1:by2, bx1:bx2] = 1.0
 
                     if cropped_mask is not None:
-                        cropped_mask = utils.to_binary_mask(torch.from_numpy(cropped_mask), 0.1)[0]
+                        cropped_mask = torch.clip(torch.from_numpy(cropped_mask), 0, 1.0)
                         item = SEG(None, cropped_mask.numpy(), 1.0, crop_region, bbox, label, None)
                         result.append(item)
 
@@ -1596,7 +1617,8 @@ class TwoSamplersForMaskUpscaler:
 
 class PixelKSampleUpscaler:
     def __init__(self, scale_method, model, vae, seed, steps, cfg, sampler_name, scheduler, positive, negative, denoise,
-                 use_tiled_vae, upscale_model_opt=None, hook_opt=None, tile_size=512, scheduler_func=None):
+                 use_tiled_vae, upscale_model_opt=None, hook_opt=None, tile_size=512, scheduler_func=None,
+                 tile_cnet_opt=None, tile_cnet_strength=1.0):
         self.params = scale_method, model, vae, seed, steps, cfg, sampler_name, scheduler, positive, negative, denoise
         self.upscale_model = upscale_model_opt
         self.hook = hook_opt
@@ -1605,6 +1627,27 @@ class PixelKSampleUpscaler:
         self.is_tiled = False
         self.vae = vae
         self.scheduler_func = scheduler_func
+        self.tile_cnet = tile_cnet_opt
+        self.tile_cnet_strength = tile_cnet_strength
+
+    def sample(self, model, seed, steps, cfg, sampler_name, scheduler, positive, negative, upscaled_latent, denoise, images):
+        if self.tile_cnet is not None:
+            image_batch, image_w, image_h, _ = images.shape
+            if image_batch > 1:
+                warnings.warn('Multiple latents in batch, Tile ControlNet being ignored')
+            else:
+                if 'TilePreprocessor' not in nodes.NODE_CLASS_MAPPINGS:
+                    raise RuntimeError("'TilePreprocessor' node (from comfyui_controlnet_aux) isn't installed.")
+                preprocessor = nodes.NODE_CLASS_MAPPINGS['TilePreprocessor']()
+                # might add capacity to set pyrUp_iters later, not needed for now though
+                preprocessed = preprocessor.execute(images, pyrUp_iters=3, resolution=min(image_w, image_h))[0]
+                apply_cnet = getattr(nodes.ControlNetApply(), nodes.ControlNetApply.FUNCTION)
+                positive = apply_cnet(positive, self.tile_cnet, preprocessed, strength=self.tile_cnet_strength)[0]
+
+        refined_latent = impact_sampling.impact_sample(model, seed, steps, cfg, sampler_name, scheduler,
+                                                       positive, negative, upscaled_latent, denoise, scheduler_func=self.scheduler_func)
+
+        return refined_latent
 
     def upscale(self, step_info, samples, upscale_factor, save_temp_prefix=None):
         scale_method, model, vae, seed, steps, cfg, sampler_name, scheduler, positive, negative, denoise = self.params
@@ -1613,24 +1656,28 @@ class PixelKSampleUpscaler:
             self.hook.set_steps(step_info)
 
         if self.upscale_model is None:
-            upscaled_latent = latent_upscale_on_pixel_space(samples, scale_method, upscale_factor, vae,
-                                                            use_tile=self.use_tiled_vae,
-                                                            save_temp_prefix=save_temp_prefix, hook=self.hook)
+            upscaled_latent, upscaled_images = \
+                latent_upscale_on_pixel_space2(samples, scale_method, upscale_factor, vae,
+                                               use_tile=self.use_tiled_vae,
+                                               save_temp_prefix=save_temp_prefix, hook=self.hook, tile_size=512)
         else:
-            upscaled_latent = latent_upscale_on_pixel_space_with_model(samples, scale_method, self.upscale_model,
-                                                                       upscale_factor, vae,
-                                                                       use_tile=self.use_tiled_vae,
-                                                                       save_temp_prefix=save_temp_prefix,
-                                                                       hook=self.hook,
-                                                                       tile_size=self.tile_size)
+            upscaled_latent, upscaled_images = \
+                latent_upscale_on_pixel_space_with_model2(samples, scale_method, self.upscale_model,
+                                                          upscale_factor, vae,
+                                                          use_tile=self.use_tiled_vae,
+                                                          save_temp_prefix=save_temp_prefix,
+                                                          hook=self.hook,
+                                                          tile_size=self.tile_size)
 
         if self.hook is not None:
             model, seed, steps, cfg, sampler_name, scheduler, positive, negative, upscaled_latent, denoise = \
                 self.hook.pre_ksample(model, seed, steps, cfg, sampler_name, scheduler, positive, negative,
                                       upscaled_latent, denoise)
 
-        refined_latent = impact_sampling.impact_sample(model, seed, steps, cfg, sampler_name, scheduler,
-                                                       positive, negative, upscaled_latent, denoise, scheduler_func=self.scheduler_func)
+        if 'noise_mask' in samples:
+            upscaled_latent['noise_mask'] = samples['noise_mask']
+
+        refined_latent = self.sample(model, seed, steps, cfg, sampler_name, scheduler, positive, negative, upscaled_latent, denoise, upscaled_images)
         return refined_latent
 
     def upscale_shape(self, step_info, samples, w, h, save_temp_prefix=None):
@@ -1640,25 +1687,29 @@ class PixelKSampleUpscaler:
             self.hook.set_steps(step_info)
 
         if self.upscale_model is None:
-            upscaled_latent = latent_upscale_on_pixel_space_shape(samples, scale_method, w, h, vae,
-                                                                  use_tile=self.use_tiled_vae,
-                                                                  save_temp_prefix=save_temp_prefix, hook=self.hook,
-                                                                  tile_size=self.tile_size)
+            upscaled_latent, upscaled_images = \
+                latent_upscale_on_pixel_space_shape2(samples, scale_method, w, h, vae,
+                                                     use_tile=self.use_tiled_vae,
+                                                     save_temp_prefix=save_temp_prefix, hook=self.hook,
+                                                     tile_size=self.tile_size)
         else:
-            upscaled_latent = latent_upscale_on_pixel_space_with_model_shape(samples, scale_method, self.upscale_model,
-                                                                             w, h, vae,
-                                                                             use_tile=self.use_tiled_vae,
-                                                                             save_temp_prefix=save_temp_prefix,
-                                                                             hook=self.hook,
-                                                                             tile_size=self.tile_size)
+            upscaled_latent, upscaled_images = \
+                latent_upscale_on_pixel_space_with_model_shape2(samples, scale_method, self.upscale_model,
+                                                                w, h, vae,
+                                                                use_tile=self.use_tiled_vae,
+                                                                save_temp_prefix=save_temp_prefix,
+                                                                hook=self.hook,
+                                                                tile_size=self.tile_size)
 
         if self.hook is not None:
             model, seed, steps, cfg, sampler_name, scheduler, positive, negative, upscaled_latent, denoise = \
                 self.hook.pre_ksample(model, seed, steps, cfg, sampler_name, scheduler, positive, negative,
                                       upscaled_latent, denoise)
 
-        refined_latent = impact_sampling.impact_sample(model, seed, steps, cfg, sampler_name, scheduler,
-                                                       positive, negative, upscaled_latent, denoise, scheduler_func=self.scheduler_func)
+        if 'noise_mask' in samples:
+            upscaled_latent['noise_mask'] = samples['noise_mask']
+
+        refined_latent = self.sample(model, seed, steps, cfg, sampler_name, scheduler, positive, negative, upscaled_latent, denoise, upscaled_images)
         return refined_latent
 
 
@@ -1768,13 +1819,14 @@ class ControlNetWrapper:
 
 class ControlNetAdvancedWrapper:
     def __init__(self, control_net, strength, start_percent, end_percent, preprocessor, prev_control_net=None,
-                 original_size=None, crop_region=None, control_image=None):
+                 original_size=None, crop_region=None, control_image=None, vae=None):
         self.control_net = control_net
         self.strength = strength
         self.preprocessor = preprocessor
         self.prev_control_net = prev_control_net
         self.start_percent = start_percent
         self.end_percent = end_percent
+        self.vae = vae
 
         if original_size is not None and crop_region is not None and control_image is not None:
             self.control_image = utils.tensor_resize(control_image, original_size[1], original_size[0])
@@ -1815,7 +1867,12 @@ class ControlNetAdvancedWrapper:
                                               "To use 'ControlNetAdvancedWrapper' for AnimateDiff, 'ComfyUI-Advanced-ControlNet' extension is required.")
                 raise Exception("'ACN_AdvancedControlNetApply' node isn't installed.")
         else:
-            positive, negative = nodes.ControlNetApplyAdvanced().apply_controlnet(positive, negative, self.control_net, cnet_image, self.strength, self.start_percent, self.end_percent)
+            if self.vae is not None:
+                apply_controlnet = nodes.ControlNetApplyAdvanced().apply_controlnet
+                signature = inspect.signature(apply_controlnet)
+                positive, negative = nodes.ControlNetApplyAdvanced().apply_controlnet(positive, negative, self.control_net, cnet_image, self.strength, self.start_percent, self.end_percent, vae=self.vae)
+            else:
+                positive, negative = nodes.ControlNetApplyAdvanced().apply_controlnet(positive, negative, self.control_net, cnet_image, self.strength, self.start_percent, self.end_percent)
 
         return positive, negative, cnet_image_list
 
@@ -1851,7 +1908,7 @@ class PixelTiledKSampleUpscaler:
     def __init__(self, scale_method, model, vae, seed, steps, cfg, sampler_name, scheduler, positive, negative,
                  denoise,
                  tile_width, tile_height, tiling_strategy,
-                 upscale_model_opt=None, hook_opt=None, tile_cnet_opt=None, tile_size=512):
+                 upscale_model_opt=None, hook_opt=None, tile_cnet_opt=None, tile_size=512, tile_cnet_strength=1.0):
         self.params = scale_method, model, vae, seed, steps, cfg, sampler_name, scheduler, positive, negative, denoise
         self.vae = vae
         self.tile_params = tile_width, tile_height, tiling_strategy
@@ -1860,6 +1917,7 @@ class PixelTiledKSampleUpscaler:
         self.tile_cnet = tile_cnet_opt
         self.tile_size = tile_size
         self.is_tiled = True
+        self.tile_cnet_strength = tile_cnet_strength
 
     def tiled_ksample(self, latent, images):
         if "BNK_TiledKSampler" in nodes.NODE_CLASS_MAPPINGS:
@@ -1883,7 +1941,7 @@ class PixelTiledKSampleUpscaler:
                 # might add capacity to set pyrUp_iters later, not needed for now though
                 preprocessed = preprocessor.execute(images, pyrUp_iters=3, resolution=min(image_w, image_h))[0]
                 apply_cnet = getattr(nodes.ControlNetApply(), nodes.ControlNetApply.FUNCTION)
-                positive = apply_cnet(positive, self.tile_cnet, preprocessed, strength=1.0)[0]
+                positive = apply_cnet(positive, self.tile_cnet, preprocessed, strength=self.tile_cnet_strength)[0]
 
         return TiledKSampler().sample(model, seed, tile_width, tile_height, tiling_strategy, steps, cfg, sampler_name,
                                       scheduler, positive, negative, latent, denoise)[0]

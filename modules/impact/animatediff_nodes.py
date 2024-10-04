@@ -6,6 +6,9 @@ from .segs_nodes import SEGSPaste
 import comfy.samplers
 
 
+
+from comfy_extras.nodes import nodes_differential_diffusion
+
 class SEGSDetailerForAnimateDiff:
     @classmethod
     def INPUT_TYPES(cls):
@@ -53,6 +56,9 @@ class SEGSDetailerForAnimateDiff:
 
         new_segs = []
         cnet_image_list = []
+
+        if noise_mask_feather > 0 and 'denoise_mask_function' not in model.model_options:
+            model = nodes_differential_diffusion.DifferentialDiffusion().apply(model)[0]
 
         for seg in segs[1]:
             cropped_image_frames = None

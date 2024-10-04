@@ -7,6 +7,9 @@ This custom node helps to conveniently enhance images through Detector, Detailer
 
 
 ## NOTICE 
+* V7.6: Automatic installation is no longer supported. Please install using ComfyUI-Manager, or manually install requirements.txt and run install.py to complete the installation.
+* V7.0: Supports Switch based on Execution Model Inversion.
+* V6.0: Supports FLUX.1 model in Impact KSampler, Detailers, PreviewBridgeLatent
 * V5.0: It is no longer compatible with versions of ComfyUI before 2024.04.08. 
 * V4.87.4: Update to a version of ComfyUI after 2024.04.08 for proper functionality.
 * V4.85: Incompatible with the outdated **ComfyUI IPAdapter Plus**. (A version dated March 24th or later is required.)
@@ -87,6 +90,7 @@ This custom node helps to conveniently enhance images through Detector, Detailer
   * `MaskDetailer (pipe)` - This is a simple inpaint node that applies the Detailer to the mask area.
 
   * `FromDetailer (SDXL/pipe)`, `BasicPipe -> DetailerPipe (SDXL)`, `Edit DetailerPipe (SDXL)` - These are pipe functions used in Detailer for utilizing the refiner model of SDXL.
+  * `Any PIPE -> BasicPipe` - Convert the PIPE Value of other custom nodes that are not BASIC_PIPE but internally have the same structure as BASIC_PIPE to BASIC_PIPE. If an incompatible type is applied, it may cause runtime errors.
 
 ### SEGS Manipulation nodes
   * `SEGSDetailer` - Performs detailed work on SEGS without pasting it back onto the original image.
@@ -104,6 +108,7 @@ This custom node helps to conveniently enhance images through Detector, Detailer
   * `SEGS Filter (range)` - This node retrieves only SEGs from SEGS that have a size and position within a certain range.
   * `SEGS Assign (label)` - Assign labels sequentially to SEGS. This node is useful when used with `[LAB]` of FaceDetailer.
   * `SEGSConcat` - Concatenate segs1 and segs2. If source shape of segs1 and segs2 are different from segs2 will be ignored.
+  * `SEGS Merge` - SEGS contains multiple SEGs. SEGS Merge integrates several SEGs into a single merged SEG. The label is changed to `merged` and the confidence becomes the minimum confidence. The applied controlnet and cropped_image are removed.
   * `Picker (SEGS)` - Among the input SEGS, you can select a specific SEG through a dialog. If no SEG is selected, it outputs an empty SEGS. Increasing the batch_size of SEGSDetailer can be used for the purpose of selecting from the candidates.
   * `Set Default Image For SEGS` - Set a default image for SEGS. SEGS with images set this way do not need to have a fallback image set. When override is set to false, the original image is preserved.
   * `Remove Image from SEGS` - Remove the image set for the SEGS that has been configured by "Set Default Image for SEGS" or SEGSDetailer. When the image for the SEGS is removed, the Detailer node will operate based on the currently processed image instead of the SEGS. 
@@ -189,15 +194,11 @@ This custom node helps to conveniently enhance images through Detector, Detailer
     * Furthermore, LatentSender is implemented with PreviewLatent, which stores the latent in payload form within the image thumbnail.
     * Due to the current structure of ComfyUI, it is unable to distinguish between SDXL latent and SD1.5/SD2.1 latent. Therefore, it generates thumbnails by decoding them using the SD1.5 method.
 
-
 ### Switch nodes
   * `Switch (image,mask)`, `Switch (latent)`, `Switch (SEGS)` - Among multiple inputs, it selects the input designated by the selector and outputs it. The first input must be provided, while the others are optional. However, if the input specified by the selector is not connected, an error may occur.
   * `Switch (Any)` - This is a Switch node that takes an arbitrary number of inputs and produces a single output. Its type is determined when connected to any node, and connecting inputs increases the available slots for connections.
-  * `Inversed Switch (Any)` - In contrast to `Switch (Any)`, it takes a single input and outputs one of many. Due to ComfyUI's functional limitations, the value of `select` must be determined at the time of queuing a prompt, and while it can serve as a `Primitive Node` or `ImpactInt`, it cannot function properly when connected through other nodes. 
-  * Guide
-    * When the `Switch (Any)` and `Inversed Switch (Any)` selects are transformed into primitives, it's important to be cautious because the select range is not appropriately constrained, potentially leading to unintended behavior.   
-    * `Switch (image,mask)`, `Switch (latent)`, `Switch (SEGS)`, `Switch (Any)` supports `sel_mode` param. The `sel_mode` sets the moment at which the `select` parameter is determined. `select_on_prompt` determines the `select` at the time of queuing the prompt, while `select_on_execution` determines it during the execution of the workflow. While `select_on_execution` offers more flexibility, it can potentially trigger workflow execution errors due to running nodes that may be impossible to execute within the limitations of ComfyUI. `select_on_prompt` bypasses this constraint by treating any inputs not selected as if they were disconnected. However, please note that when using `select_on_prompt`, the `select` can only be used with widgets or `Primitive Nodes` determined at the queue prompt.
-    * There is an issue when connecting the built-in reroute node with the switch's input/output slots. it can lead to forced disconnections during workflow loading. Therefore, it is advisable not to use reroute for making connections in such cases. However, there are no issues when using the reroute node in Pythongossss.
+  * `Inversed Switch (Any)` - In contrast to `Switch (Any)`, it takes a single input and outputs one of many.
+  * NOTE: See this [tutorial](https://github.com/ltdrdata/ComfyUI-extension-tutorials/blob/Main/ComfyUI-Impact-Pack/tutorial/switch.md) 
 
 ### [Wildcards](http://github.com/ltdrdata/ComfyUI-extension-tutorials/blob/Main/ComfyUI-Impact-Pack/tutorial/ImpactWildcard.md) nodes
   * These are nodes that supports syntax in the form of `__wildcard-name__` and dynamic prompt syntax like `{a|b|c}`.
@@ -220,6 +221,7 @@ This custom node helps to conveniently enhance images through Detector, Detailer
   * `RegionalSamplerAdvanced` - This is the Advanced version of the RegionalSampler. You can control it using `step` instead of `denoise`.
     > NOTE: The `sde` sampler and `uni_pc` sampler introduce additional noise during each step of the sampling process. To mitigate this, when sampling each region, the `uni_pc` sampler applies additional `dpmpp_fast`, and the sde sampler applies the `dpmpp_2m` sampler as an additional measure.
 
+
 ### Impact KSampler
   * These samplers support basic_pipe and AYS scheduler
   * `KSampler (pipe)` - pipe version of KSampler
@@ -229,17 +231,21 @@ This custom node helps to conveniently enhance images through Detector, Detailer
   
 
 ### Batch/List Util
-  * `Image batch To Image List` - Convert Image batch to Image List
+  * `Image Batch to Image List` - Convert Image batch to Image List
     - You can use images generated in a multi batch to handle them
+  * `Image List to Image Batch` - Convert Image List to Image Batch 
   * `Make Image List` - Convert multiple images into a single image list
   * `Make Image Batch` - Convert multiple images into a single image batch
     - The input of images can be scaled up as needed
-
+  * `Masks to Mask List`, `Mask List to Masks`, `Make Mask List`, `Make Mask Batch` - It has the same functionality as the nodes above, but uses mask as input instead of image.
+  * `Flatten Mask Batch` - Flattens a Mask Batch into a single Mask. Normal operation is not guaranteed for non-binary masks. 
+  * `Make List (Any)` - Create a list with arbitrary values.
 
 ### Logics (experimental) 
   * These nodes are experimental nodes designed to implement the logic for loops and dynamic switching.
-  * `ImpactCompare`, `ImpactConditionalBranch`, `ImpactConditionalBranchSelMode`, `ImpactInt`, `ImpactValueSender`, `ImpactValueReceiver`, `ImpactImageInfo`, `ImpactMinMax`, `ImpactNeg`, `ImpactConditionalStopIteration`
+  * `ImpactCompare`, `ImpactConditionalBranch`, `ImpactConditionalBranchSelMode`, `ImpactInt`, `ImpactBoolean`, `ImpactValueSender`, `ImpactValueReceiver`, `ImpactImageInfo`, `ImpactMinMax`, `ImpactNeg`, `ImpactConditionalStopIteration`
   * `ImpactIsNotEmptySEGS` - This node returns `true` only if the input SEGS is not empty. 
+  * `ImpactIfNone` - Returns `true` if any_input is None, and returns `false` if it is not None.
   * `Queue Trigger` - When this node is executed, it adds a new queue to assist with repetitive tasks. It will only execute if the signal's status changes.
   * `Queue Trigger (Countdown)` - Like the Queue Trigger, it adds a queue, but only adds it if it's greater than 1, and decrements the count by one each time it runs.
   * `Sleep` - Waits for the specified time (in seconds).
@@ -277,6 +283,9 @@ This custom node helps to conveniently enhance images through Detector, Detailer
   * `String Selector` - It selects and returns a portion of the string. When `multiline` mode is disabled, it simply returns the string of the line pointed to by the selector. When `multiline` mode is enabled, it divides the string based on lines that start with `#` and returns them. If the `select` value is larger than the number of items, it will start counting from the first line again and return accordingly.
   * `Combine Conditionings` - It takes multiple conditionings as input and combines them into a single conditioning.
   * `Concat Conditionings` - It takes multiple conditionings as input and concat them into a single conditioning.
+  * `Negative Cond Placeholder` - Models like FLUX.1 do not use Negative Conditioning. This is a placeholder node for them. You can use FLUX.1 by replacing the Negative Conditioning used in Impact KSampler, KSampler (Inspire), and Detailer with this node.
+  * `Execution Order Controller` - A helper node that can forcibly control the execution order of nodes.
+    * Connect the output of the node that should be executed first to the signal, and make the input of the node that should be executed later pass through this node.
 
 
 
@@ -297,37 +306,46 @@ This custom node helps to conveniently enhance images through Detector, Detailer
 
 
 ## Ultralytics models
-* huggingface.co/Bingsu/[adetailer](https://github.com/ultralytics/assets/releases/) - You can download face, people detection models, and clothing detection models.
+* When using ultralytics models, save them separately in `models/ultralytics/bbox` and `models/ultralytics/segm` depending on the type of model. Many models can be downloaded by searching for `ultralytics` in the Model Manager of ComfyUI-Manager.
+* huggingface.co/Bingsu/[adetailer](https://huggingface.co/Bingsu/adetailer/tree/main) - You can download face, people detection models, and clothing detection models.
 * ultralytics/[assets](https://github.com/ultralytics/assets/releases/) - You can download various types of detection models other than faces or people.
 * civitai/[adetailer](https://civitai.com/search/models?sortBy=models_v5&query=adetailer) - You can download various types detection models....Many models are associated with NSFW content.
 
 
 ## Installation
 
+### Install via ComfyUI-Manager (Recommended)
+* Search `ComfyUI Impact Pack` in ComfyUI-Manager and click `Install` button.
+
+### Manual Install (Not Recommended)
 1. `cd custom_nodes`
-1. `git clone https://github.com/ltdrdata/ComfyUI-Impact-Pack.git`
+2. `git clone https://github.com/ltdrdata/ComfyUI-Impact-Pack.git`
 3. `cd ComfyUI-Impact-Pack`
 4. (optional) `git clone https://github.com/ltdrdata/ComfyUI-Impact-Subpack impact_subpack`
    * Impact Pack will automatically download subpack during its initial launch.
 5. (optional) `python install.py`
    * Impact Pack will automatically install its dependencies during its initial launch.
    * For the portable version, you should execute the command `..\..\..\python_embeded\python.exe install.py` to run the installation script.
-
-
 6. Restart ComfyUI
 
-* NOTE: If an error occurs during the installation process, please refer to [Troubleshooting Page](troubleshooting/TROUBLESHOOTING.md) for assistance. 
-* You can use this colab notebook [colab notebook](https://colab.research.google.com/github/ltdrdata/ComfyUI-Impact-Pack/blob/Main/notebook/comfyui_colab_impact_pack.ipynb) to launch it. This notebook automatically downloads the impact pack to the custom_nodes directory, installs the tested dependencies, and runs it.
+* NOTE1: If an error occurs during the installation process, please refer to [Troubleshooting Page](troubleshooting/TROUBLESHOOTING.md) for assistance. 
+* NOTE2: You can use this colab notebook [colab notebook](https://colab.research.google.com/github/ltdrdata/ComfyUI-Impact-Pack/blob/Main/notebook/comfyui_colab_impact_pack.ipynb) to launch it. This notebook automatically downloads the impact pack to the custom_nodes directory, installs the tested dependencies, and runs it.
+* NOTE3: If you create an empty file named `skip_download_model` in the `ComfyUI/custom_nodes/` directory, it will skip the model download step during the installation of the impact pack.
+
 
 ## Package Dependencies (If you need to manual setup.)
 
 * pip install
-   * openmim
    * segment-anything
    * ultralytics
    * scikit-image
-   * piexif
-   * (optional) pycocotools
+   * piexif 
+   * opencv-python
+   * GitPython
+   * scipy
+   * numpy<2
+   * dill
+   * matplotlib
    * (optional) onnxruntime
 
 * linux packages (ubuntu)

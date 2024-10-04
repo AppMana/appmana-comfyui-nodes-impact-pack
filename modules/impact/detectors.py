@@ -6,21 +6,31 @@ from . import utils
 import torch
 from .core import SEG
 
+SAM_MODEL_TOOLTIP = {"tooltip": "Segment Anything Model for Silhouette Detection.\nBe sure to use the SAM_MODEL loaded through the SAMLoader (Impact) node as input."}
+SAM_MODEL_TOOLTIP_OPTIONAL = {"tooltip": "[OPTIONAL]\nSegment Anything Model for Silhouette Detection.\nBe sure to use the SAM_MODEL loaded through the SAMLoader (Impact) node as input.\nGiven this input, it refines the rectangular areas detected by BBOX_DETECTOR into silhouette shapes through SAM.\nsam_model_opt takes priority over segm_detector_opt."}
+
+MASK_HINT_THRESHOLD_TOOLTIP = "When detection_hint is mask-area, the mask of SEGS is used as a point hint for SAM (Segment Anything).\nIn this case, only the areas of the mask with brightness values equal to or greater than mask_hint_threshold are used as hints."
+MASK_HINT_USE_NEGATIVE_TOOLTIP = "When detecting with SAM (Segment Anything), negative hints are applied as follows:\nSmall: When the SEGS is smaller than 10 pixels in size\nOuter: Sampling the image area outside the SEGS region at regular intervals"
+
+DILATION_TOOLTIP = "Set the value to dilate the result mask. If the value is negative, it erodes the mask."
+DETECTION_HINT_TOOLTIP = {"tooltip": "It is recommended to use only center-1.\nWhen refining the mask of SEGS with the SAM (Segment Anything) model, center-1 uses only the rectangular area of SEGS and a single point at the exact center as hints.\nOther options were added during the experimental stage and do not work well."}
+
+BBOX_EXPANSION_TOOLTIP = "When performing SAM (Segment Anything) detection within the SEGS area, the rectangular area of SEGS is expanded and used as a hint."
 
 class SAMDetectorCombined:
     @classmethod
     def INPUT_TYPES(s):
         return {"required": {
-                        "sam_model": ("SAM_MODEL", ),
-                        "segs": ("SEGS", ),
-                        "image": ("IMAGE", ),
+                        "sam_model": ("SAM_MODEL", SAM_MODEL_TOOLTIP),
+                        "segs": ("SEGS", {"tooltip": "This is the segment information detected by the detector.\nIt refines the Mask through the SAM (Segment Anything) detector for all areas pointed to by SEGS, and combines all Masks to return as a single Mask."}),
+                        "image": ("IMAGE", {"tooltip": "It is assumed that segs contains only the information about the detected areas, and does not include the image. SAM (Segment Anything) operates by referencing this image."}),
                         "detection_hint": (["center-1", "horizontal-2", "vertical-2", "rect-4", "diamond-4", "mask-area",
-                                            "mask-points", "mask-point-bbox", "none"],),
-                        "dilation": ("INT", {"default": 0, "min": -512, "max": 512, "step": 1}),
-                        "threshold": ("FLOAT", {"default": 0.93, "min": 0.0, "max": 1.0, "step": 0.01}),
-                        "bbox_expansion": ("INT", {"default": 0, "min": 0, "max": 1000, "step": 1}),
-                        "mask_hint_threshold": ("FLOAT", {"default": 0.7, "min": 0.0, "max": 1.0, "step": 0.01}),
-                        "mask_hint_use_negative": (["False", "Small", "Outter"], )
+                                            "mask-points", "mask-point-bbox", "none"], DETECTION_HINT_TOOLTIP),
+                        "dilation": ("INT", {"default": 0, "min": -512, "max": 512, "step": 1, "tooltip": DILATION_TOOLTIP}),
+                        "threshold": ("FLOAT", {"default": 0.93, "min": 0.0, "max": 1.0, "step": 0.01, "tooltip": "Set the sensitivity threshold for the mask detected by SAM (Segment Anything). A higher value generates a more specific mask with a narrower range. For example, when pointing to a person's area, it might detect clothes, which is a narrower range, instead of the entire person."}),
+                        "bbox_expansion": ("INT", {"default": 0, "min": 0, "max": 1000, "step": 1, "tooltip": BBOX_EXPANSION_TOOLTIP}),
+                        "mask_hint_threshold": ("FLOAT", {"default": 0.7, "min": 0.0, "max": 1.0, "step": 0.01, "tooltip": MASK_HINT_THRESHOLD_TOOLTIP}),
+                        "mask_hint_use_negative": (["False", "Small", "Outter"], {"tooltip": MASK_HINT_USE_NEGATIVE_TOOLTIP})
                       }
                 }
 
@@ -39,16 +49,16 @@ class SAMDetectorSegmented:
     @classmethod
     def INPUT_TYPES(s):
         return {"required": {
-                        "sam_model": ("SAM_MODEL", ),
-                        "segs": ("SEGS", ),
-                        "image": ("IMAGE", ),
+                        "sam_model": ("SAM_MODEL", SAM_MODEL_TOOLTIP),
+                        "segs": ("SEGS", {"tooltip": "This is the segment information detected by the detector.\nFor the SEGS region, the masks detected by SAM (Segment Anything) are created as a unified mask and a batch of individual masks."}),
+                        "image": ("IMAGE", {"tooltip": "It is assumed that segs contains only the information about the detected areas, and does not include the image. SAM (Segment Anything) operates by referencing this image."}),
                         "detection_hint": (["center-1", "horizontal-2", "vertical-2", "rect-4", "diamond-4", "mask-area",
-                                            "mask-points", "mask-point-bbox", "none"],),
-                        "dilation": ("INT", {"default": 0, "min": -512, "max": 512, "step": 1}),
+                                            "mask-points", "mask-point-bbox", "none"], DETECTION_HINT_TOOLTIP),
+                        "dilation": ("INT", {"default": 0, "min": -512, "max": 512, "step": 1, "tooltip": DILATION_TOOLTIP}),
                         "threshold": ("FLOAT", {"default": 0.93, "min": 0.0, "max": 1.0, "step": 0.01}),
-                        "bbox_expansion": ("INT", {"default": 0, "min": 0, "max": 1000, "step": 1}),
-                        "mask_hint_threshold": ("FLOAT", {"default": 0.7, "min": 0.0, "max": 1.0, "step": 0.01}),
-                        "mask_hint_use_negative": (["False", "Small", "Outter"], )
+                        "bbox_expansion": ("INT", {"default": 0, "min": 0, "max": 1000, "step": 1, "tooltip": BBOX_EXPANSION_TOOLTIP}),
+                        "mask_hint_threshold": ("FLOAT", {"default": 0.7, "min": 0.0, "max": 1.0, "step": 0.01, "tooltip": MASK_HINT_THRESHOLD_TOOLTIP}),
+                        "mask_hint_use_negative": (["False", "Small", "Outter"], {"tooltip": MASK_HINT_USE_NEGATIVE_TOOLTIP})
                       }
                 }
 
@@ -200,7 +210,7 @@ class SimpleDetectorForEach:
                       },
                 "optional": {
                         "post_dilation": ("INT", {"default": 0, "min": -512, "max": 512, "step": 1}),
-                        "sam_model_opt": ("SAM_MODEL", ),
+                        "sam_model_opt": ("SAM_MODEL", SAM_MODEL_TOOLTIP_OPTIONAL),
                         "segm_detector_opt": ("SEGM_DETECTOR", ),
                       }
                 }
@@ -312,7 +322,7 @@ class SimpleDetectorForAnimateDiff:
                 "optional": {
                         "masking_mode": (["Pivot SEGS", "Combine neighboring frames", "Don't combine"],),
                         "segs_pivot": (["Combined mask", "1st frame mask"],),
-                        "sam_model_opt": ("SAM_MODEL", ),
+                        "sam_model_opt": ("SAM_MODEL", SAM_MODEL_TOOLTIP_OPTIONAL),
                         "segm_detector_opt": ("SEGM_DETECTOR", ),
                  }
                 }
@@ -413,11 +423,12 @@ class SimpleDetectorForAnimateDiff:
                 merged_mask = get_whole_merged_mask()
                 return segs_nodes.MaskToSEGS.doit(merged_mask, False, crop_factor, False, drop_size, contour_fill=True)[0]
 
-        def get_merged_neighboring_segs():
+        def get_segs(merged_neighboring=False):
             pivot_segs = get_pivot_segs()
 
             masks_by_frame = get_masked_frames()
-            masks_by_frame = get_merged_neighboring_mask(masks_by_frame)
+            if merged_neighboring:
+                masks_by_frame = get_merged_neighboring_mask(masks_by_frame)
 
             new_segs = []
             for seg in pivot_segs[1]:
@@ -436,33 +447,15 @@ class SimpleDetectorForAnimateDiff:
 
             return pivot_segs[0], new_segs
 
-        def get_separated_segs():
-            pivot_segs = get_pivot_segs()
-
-            masks_by_frame = get_masked_frames()
-
-            new_segs = []
-            for seg in pivot_segs[1]:
-                cropped_mask = torch.zeros(seg.cropped_mask.shape, dtype=torch.float32, device="cpu").unsqueeze(0)
-                x1, y1, x2, y2 = seg.crop_region
-                for mask in masks_by_frame:
-                    cropped_mask_at_frame = mask[y1:y2, x1:x2]
-                    cropped_mask = torch.cat((cropped_mask, cropped_mask_at_frame), dim=0)
-
-                new_seg = SEG(seg.cropped_image, cropped_mask, seg.confidence, seg.crop_region, seg.bbox, seg.label, seg.control_net_wrapper)
-                new_segs.append(new_seg)
-
-            return pivot_segs[0], new_segs
-
         # create result mask
         if masking_mode == "Pivot SEGS":
             return (get_pivot_segs(), )
 
         elif masking_mode == "Combine neighboring frames":
-            return (get_merged_neighboring_segs(), )
+            return (get_segs(merged_neighboring=True), )
 
         else: # elif masking_mode == "Don't combine":
-            return (get_separated_segs(), )
+            return (get_segs(merged_neighboring=False), )
 
     def doit(self, bbox_detector, image_frames, bbox_threshold, bbox_dilation, crop_factor, drop_size,
              sub_threshold, sub_dilation, sub_bbox_expansion, sam_mask_hint_threshold,

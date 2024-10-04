@@ -8,9 +8,11 @@ import comfy.sample
 import comfy.utils
 import torch
 import math
+import comfy.model_management as mm
+from comfy_extras.nodes import nodes_custom_sampler
 
 from comfy_extras.nodes.nodes_custom_sampler import Noise_EmptyNoise, Noise_RandomNoise
-
+from comfy import node_helpers
 
 def calculate_sigmas(model, sampler, scheduler, steps):
     discard_penultimate_sigma = False
@@ -20,6 +22,8 @@ def calculate_sigmas(model, sampler, scheduler, steps):
 
     if scheduler.startswith('AYS'):
         sigmas = nodes.NODE_CLASS_MAPPINGS['AlignYourStepsScheduler']().get_sigmas(scheduler[4:], steps, denoise=1.0)[0]
+    elif scheduler.startswith('GITS[coeff='):
+        sigmas = nodes.NODE_CLASS_MAPPINGS['GITSScheduler']().get_sigmas(float(scheduler[11:-1]), steps, denoise=1.0)[0]
     else:
         sigmas = samplers.calculate_sigmas(model.get_model_object("model_sampling"), scheduler, steps)
 
@@ -139,7 +143,29 @@ def sample_with_custom_noise(model, add_noise, noise_seed, cfg, positive, negati
         touched_callback = preview_callback
 
     disable_pbar = not current_execution_context().server.receive_all_progress_notifications
-    samples = comfy.sample.sample_custom(model, noise, cfg, sampler, sigmas, positive, negative, latent_image, noise_mask=noise_mask, callback=touched_callback, disable_pbar=disable_pbar, seed=noise_seed)
+
+    device = mm.get_torch_device()
+
+    noise = noise.to(device)
+    latent_image = latent_image.to(device)
+    if noise_mask is not None:
+        noise_mask = noise_mask.to(device)
+
+    if negative != 'NegativePlaceholder':
+        # This way is incompatible with Advanced ControlNet, yet.
+        # guider = comfy.samplers.CFGGuider(model)
+        # guider.set_conds(positive, negative)
+        # guider.set_cfg(cfg)
+        samples = comfy.sample.sample_custom(model, noise, cfg, sampler, sigmas, positive, negative, latent_image,
+                                             noise_mask=noise_mask, callback=touched_callback,
+                                             disable_pbar=disable_pbar, seed=noise_seed)
+    else:
+        guider = nodes_custom_sampler.Guider_Basic(model)
+        positive = node_helpers.conditioning_set_values(positive, {"guidance": cfg})
+        guider.set_conds(positive)
+        samples = guider.sample(noise, latent_image, sampler, sigmas, denoise_mask=noise_mask, callback=touched_callback, disable_pbar=disable_pbar, seed=noise_seed)
+
+    samples = samples.to(comfy.model_management.intermediate_device())
 
     out["samples"] = samples
     if "x0" in x0_output:
@@ -198,7 +224,8 @@ def impact_sample(model, seed, steps, cfg, sampler_name, scheduler, positive, ne
     advanced_steps = math.floor(steps / denoise)
     start_at_step = advanced_steps - steps
     end_at_step = start_at_step + steps
-    return separated_sample(model, True, seed, advanced_steps, cfg, sampler_name, scheduler, positive, negative, latent_image, start_at_step, end_at_step, False, scheduler_func=scheduler_func)
+    return separated_sample(model, True, seed, advanced_steps, cfg, sampler_name, scheduler, positive, negative, latent_image,
+                            start_at_step, end_at_step, False, scheduler_func=scheduler_func)
 
 
 def ksampler_wrapper(model, seed, steps, cfg, sampler_name, scheduler, positive, negative, latent_image, denoise,

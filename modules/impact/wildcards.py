@@ -12,7 +12,7 @@ from . import config
 
 wildcards_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "wildcards"))
 
-RE_WildCardQuantifier = re.compile(r"(?P<quantifier>\d+)#__(?P<keyword>[\w.\-+/*\\]+)__", re.IGNORECASE)
+RE_WildCardQuantifier = re.compile(r"(?P<quantifier>\d+)#__(?P<keyword>[\w.\-+/*\\]+?)__", re.IGNORECASE)
 wildcard_lock = threading.Lock()
 wildcard_dict = {}
 
@@ -29,7 +29,7 @@ def get_wildcard_dict():
 
 
 def wildcard_normalize(x):
-    return x.replace("\\", "/").lower()
+    return x.replace("\\", "/").replace(' ', '-').lower()
 
 
 def read_wildcard(k, v):
@@ -41,6 +41,9 @@ def read_wildcard(k, v):
             new_key = f"{k}/{k2}"
             new_key = wildcard_normalize(new_key)
             read_wildcard(new_key, v2)
+    elif isinstance(v, str):
+        k = wildcard_normalize(k)
+        wildcard_dict[k] = [v]
 
 
 def read_wildcard_dict(wildcard_path):
@@ -53,23 +56,28 @@ def read_wildcard_dict(wildcard_path):
             if file.endswith('.txt'):
                 file_path = os.path.join(root, file)
                 rel_path = os.path.relpath(file_path, wildcard_path)
-                key = os.path.splitext(rel_path)[0].replace('\\', '/').lower()
+                key = wildcard_normalize(os.path.splitext(rel_path)[0])
 
                 try:
                     with open(file_path, 'r', encoding="ISO-8859-1") as f:
                         lines = f.read().splitlines()
                         wildcard_dict[key] = lines
-                except UnicodeDecodeError:
+                except yaml.reader.ReaderError:
                     with open(file_path, 'r', encoding="UTF-8", errors="ignore") as f:
                         lines = f.read().splitlines()
                         wildcard_dict[key] = lines
             elif file.endswith('.yaml'):
                 file_path = os.path.join(root, file)
-                with open(file_path, 'r') as f:
-                    yaml_data = yaml.load(f, Loader=yaml.FullLoader)
 
-                    for k, v in yaml_data.items():
-                        read_wildcard(k, v)
+                try:
+                    with open(file_path, 'r', encoding="ISO-8859-1") as f:
+                        yaml_data = yaml.load(f, Loader=yaml.FullLoader)
+                except yaml.reader.ReaderError as e:
+                    with open(file_path, 'r', encoding="UTF-8", errors="ignore") as f:
+                        yaml_data = yaml.load(f, Loader=yaml.FullLoader)
+
+                for k, v in yaml_data.items():
+                    read_wildcard(k, v)
 
     return wildcard_dict
 
@@ -102,6 +110,8 @@ def process(text, seed=None):
         random.seed(seed)
     random_gen = np.random.default_rng(seed)
 
+    local_wildcard_dict = get_wildcard_dict()
+
     def replace_options(string):
         replacements_found = False
 
@@ -114,6 +124,7 @@ def process(text, seed=None):
             select_sep = ' '
             range_pattern = r'(\d+)(-(\d+))?'
             range_pattern2 = r'-(\d+)'
+            wildcard_pattern = r"__([\w.\-+/*\\]+?)__"
 
             if len(multi_select_pattern) > 1:
                 r = re.match(range_pattern, options[0])
@@ -139,7 +150,13 @@ def process(text, seed=None):
 
                     if select_range is not None and len(multi_select_pattern) == 2:
                         # PATTERN: count$$
-                        options[0] = multi_select_pattern[1]
+                        matches = re.findall(wildcard_pattern, multi_select_pattern[1])
+                        if len(options) == 1 and matches:
+                            # count$$<single wildcard>
+                            options = local_wildcard_dict.get(matches[0])
+                        else:
+                            # count$$opt1|opt2|...
+                            options[0] = multi_select_pattern[1]
                     elif select_range is not None and len(multi_select_pattern) == 3:
                         # PATTERN: count$$ sep $$
                         select_sep = multi_select_pattern[1]
@@ -186,8 +203,7 @@ def process(text, seed=None):
         return replaced_string, replacements_found
 
     def replace_wildcard(string):
-        local_wildcard_dict = get_wildcard_dict()
-        pattern = r"__([\w.\-+/*\\]+)__"
+        pattern = r"__([\w.\-+/*\\]+?)__"
         matches = re.findall(pattern, string)
 
         replacements_found = False
@@ -200,11 +216,11 @@ def process(text, seed=None):
                 replacements_found = True
                 string = string.replace(f"__{match}__", replacement, 1)
             elif '*' in keyword:
-                subpattern = keyword.replace('*', '.*').replace('+','\\+')
+                subpattern = keyword.replace('*', '.*').replace('+', '\\+')
                 total_patterns = []
                 found = False
                 for k, v in local_wildcard_dict.items():
-                    if re.match(subpattern, k) is not None:
+                    if re.match(subpattern, k) is not None or re.match(subpattern, k+'/') is not None:
                         total_patterns += v
                         found = True
 
@@ -412,7 +428,7 @@ def process_with_loras(wildcard_opt, model, clip, clip_encoder=None, seed=None, 
 
 def starts_with_regex(pattern, text):
     regex = re.compile(pattern)
-    return bool(regex.match(text))
+    return regex.match(text)
 
 
 def split_to_dict(text):
@@ -494,18 +510,21 @@ def process_wildcard_for_segs(wildcard):
 
         return 'LAB', WildcardChooserDict(items)
 
-    elif starts_with_regex(r"\[(ASC|DSC|RND)\]", wildcard):
-        mode = wildcard[1:4]
-        items = split_string_with_sep(wildcard[5:])
-
-        if mode == 'RND':
-            random.shuffle(items)
-            return mode, WildcardChooser(items, True)
-        else:
-            return mode, WildcardChooser(items, False)
-
     else:
-        return None, WildcardChooser([(None, wildcard)], False)
+        match = starts_with_regex(r"\[(ASC-SIZE|DSC-SIZE|ASC|DSC|RND)\]", wildcard)
+
+        if match:
+            mode = match[1]
+            items = split_string_with_sep(wildcard[len(match[0]):])
+
+            if mode == 'RND':
+                random.shuffle(items)
+                return mode, WildcardChooser(items, True)
+            else:
+                return mode, WildcardChooser(items, False)
+
+        else:
+            return None, WildcardChooser([(None, wildcard)], False)
 
 
 def wildcard_load():

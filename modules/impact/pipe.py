@@ -1,4 +1,5 @@
 from comfy.cmd import folder_paths
+from .utils import any_typ
 
 
 class ToDetailerPipe:
@@ -106,6 +107,23 @@ class FromDetailerPipe_SDXL:
     def doit(self, detailer_pipe):
         model, clip, vae, positive, negative, wildcard, bbox_detector, segm_detector_opt, sam_model_opt, detailer_hook, refiner_model, refiner_clip, refiner_positive, refiner_negative = detailer_pipe
         return detailer_pipe, model, clip, vae, positive, negative, bbox_detector, sam_model_opt, segm_detector_opt, detailer_hook, refiner_model, refiner_clip, refiner_positive, refiner_negative
+
+
+class AnyPipeToBasic:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {"any_pipe": (any_typ,)},
+        }
+
+    RETURN_TYPES = ("BASIC_PIPE", )
+    RETURN_NAMES = ("basic_pipe", )
+    FUNCTION = "doit"
+
+    CATEGORY = "ImpactPack/Pipe"
+
+    def doit(self, any_pipe):
+        return (any_pipe[:5], )
 
 
 class ToBasicPipe:
