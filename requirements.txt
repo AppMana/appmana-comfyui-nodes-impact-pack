@@ -1,3 +1,4 @@
+comfyui
 segment-anything
 scikit-image
 piexif
