@@ -5,6 +5,7 @@ version = "7.10"
 license = { file = "LICENSE.txt" }
 dependencies = [
   "comfyui",
+  "setuptools>=75",
   "segment-anything",
   "scikit-image",
   "piexif",
