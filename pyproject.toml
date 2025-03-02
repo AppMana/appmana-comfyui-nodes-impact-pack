@@ -48,3 +48,7 @@ comfyui_impact_pack_web_directory = "comfyui_impact_pack"
 
 [project.entry-points."comfyui.custom_config"]
 comfyui_impact_pack = "comfyui_impact_pack.modules.impact_config.add_configuration:add_configuration"
+
+
+[tool.setuptools.package-data]
+"*" = ["**/*.js", "**/*.json" ]
