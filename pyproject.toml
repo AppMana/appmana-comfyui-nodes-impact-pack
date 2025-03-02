@@ -39,11 +39,19 @@ build-backend = "setuptools.build_meta"
 packages = [ 
     "comfyui_impact_pack",
     "comfyui_impact_pack.modules",
+    "comfyui_impact_pack.modules.impact",
+    "comfyui_impact_pack.modules.impact.nodes",
+    "comfyui_impact_pack.modules.impact_config",
+    "comfyui_impact_pack.modules.thirdparty",
 ]
 
 [tool.setuptools.package-dir]
 "comfyui_impact_pack" = "."
 "comfyui_impact_pack.modules" = "modules"
+"comfyui_impact_pack.modules.impact" = "modules/impact"
+"comfyui_impact_pack.modules.impact.nodes" = "modules/impact/nodes"
+"comfyui_impact_pack.modules.impact_config" = "modules/impact_config"
+"comfyui_impact_pack.modules.thirdparty" = "modules/thirdparty"
 
 [tool.setuptools.dynamic]
 dependencies = { file = ["requirements.txt"] }
