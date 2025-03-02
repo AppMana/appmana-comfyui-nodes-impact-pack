@@ -36,8 +36,14 @@ requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-packages = ["comfyui_impact_pack"]
-package-dir = { "comfyui_impact_pack" = "." }
+packages = [ 
+    "comfyui_impact_pack",
+    "comfyui_impact_pack.modules",
+]
+
+[tool.setuptools.package-dir]
+"comfyui_impact_pack" = "."
+"comfyui_impact_pack.modules" = "modules"
 
 [tool.setuptools.dynamic]
 dependencies = { file = ["requirements.txt"] }
