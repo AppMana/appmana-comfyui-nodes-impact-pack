@@ -5,7 +5,7 @@ version = "7.10"
 license = { file = "LICENSE.txt" }
 dependencies = [
   "comfyui",
-  "comfyui-frontend-package@git+https://github.com/AppMana/appmana-comfyui-frontend.git#796787ffb4603e182415dbc9632160741fa29f94&subdirectory=comfyui_frontend_package",
+  "comfyui-frontend-package",
   "setuptools>=75",
   "segment-anything",
   "scikit-image",
